@@ -1,0 +1,8 @@
+fastapi[all]==0.111.0
+uvicorn[standard]
+SQLAlchemy>=2.0.0
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic-settings
+PyMySQL
+python-multipart
