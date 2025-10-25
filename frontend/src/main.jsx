@@ -15,6 +15,8 @@ import AlbumDetail from "./pages/AlbumDetail";
 import MediaDetail from "./pages/MediaDetail";
 import SocialFeed from "./pages/SocialFeed";
 import SocialPostDetail from "./pages/SocialPostDetail";
+import CategoryCollection from "./pages/CategoryCollection";
+import ControlCenter from "./pages/ControlCenter";
 
 const router = createBrowserRouter([
   {
@@ -29,6 +31,8 @@ const router = createBrowserRouter([
       { path: "upload", element: <Upload /> },
       { path: "social", element: <SocialFeed /> },
       { path: "social/:id", element: <SocialPostDetail /> },
+      { path: "collections/:key", element: <CategoryCollection /> },
+      { path: "control", element: <ControlCenter /> },
     ],
   },
 ]);

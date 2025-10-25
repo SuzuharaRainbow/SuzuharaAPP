@@ -67,3 +67,23 @@ CREATE TABLE IF NOT EXISTS media_tags (
 INSERT INTO users (username, email, password_hash, role)
 VALUES ('developer', 'developer@example.com', '$2b$12$EOyw3C1Exhm9aeQcoK0lmehZldXtqPcKmDxiVhD7CKLrSDyb2lf6W', 'developer')
 ON DUPLICATE KEY UPDATE username = VALUES(username);
+
+CREATE TABLE IF NOT EXISTS home_sections (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `key` VARCHAR(64) NOT NULL UNIQUE,
+  title VARCHAR(255) NOT NULL,
+  preview_rows INT UNSIGNED NOT NULL DEFAULT 1,
+  order_index INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_home_sections_order (order_index)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS home_section_albums (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  section_id BIGINT UNSIGNED NOT NULL,
+  album_id BIGINT UNSIGNED NOT NULL,
+  order_index INT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_home_section FOREIGN KEY (section_id) REFERENCES home_sections(id) ON DELETE CASCADE,
+  CONSTRAINT fk_home_section_album FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
+  CONSTRAINT uq_home_section_album UNIQUE KEY (section_id, album_id)
+) ENGINE=InnoDB;

@@ -1,13 +1,16 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api, { ApiError } from "../api";
 import { useAlbums } from "../hooks/useAlbums";
 import { useRequireDeveloper } from "../hooks/useMe";
+import { useSearchParams } from "react-router-dom";
 
 export default function Upload() {
   const { isLoading, isDeveloper } = useRequireDeveloper();
+  const [searchParams] = useSearchParams();
+  const defaultAlbumParam = searchParams.get("albumId") || searchParams.get("album_id") || "";
   const [files, setFiles] = useState([]);
-  const [albumId, setAlbumId] = useState("");
+  const [albumId, setAlbumId] = useState(defaultAlbumParam);
   const [title, setTitle] = useState("");
   const [takenAt, setTakenAt] = useState("");
   const [message, setMessage] = useState("");
@@ -58,6 +61,10 @@ export default function Upload() {
     const selected = Array.from(event.target.files || []);
     setFiles(selected);
   };
+
+  useEffect(() => {
+    setAlbumId(defaultAlbumParam);
+  }, [defaultAlbumParam]);
 
   if (isLoading) {
     return <div>加载中…</div>;

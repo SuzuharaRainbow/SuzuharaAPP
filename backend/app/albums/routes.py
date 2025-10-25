@@ -4,7 +4,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
 
 from ..deps import SessionDep, require_developer, require_user
 from ..models import Album, Media, User
@@ -24,7 +25,15 @@ class AlbumUpdate(BaseModel):
     cover_media_id: Optional[int] = None
 
 
-def _album_dict(album: Album) -> dict:
+def _album_dict(
+    album: Album,
+    *,
+    media_count: Optional[int] = None,
+    first_media_id: Optional[int] = None,
+    first_media_preview: Optional[str] = None,
+    first_media_storage: Optional[str] = None,
+    first_media_type: Optional[str] = None,
+) -> dict:
     return {
         "id": album.id,
         "title": album.title,
@@ -32,6 +41,11 @@ def _album_dict(album: Album) -> dict:
         "created_at": album.created_at,
         "owner_id": album.owner_id,
         "cover_media_id": album.cover_media_id,
+        "media_count": media_count,
+        "first_media_id": first_media_id,
+        "first_media_preview_path": first_media_preview,
+        "first_media_storage_path": first_media_storage,
+        "first_media_type": first_media_type,
     }
 
 
@@ -48,16 +62,88 @@ def list_albums(
     current_user: User = Depends(require_user),
     visibility: Optional[str] = Query(default=None),
 ):
-    query = select(Album)
+    album_table = Album.__table__
+    name_base = func.substring_index(Media.filename, ".", 1)
+    name_numeric = func.cast(name_base, MySQLInteger(unsigned=True))
+
+    media_count_subquery = (
+        select(func.count(Media.id))
+        .where(Media.album_id == album_table.c.id)
+        .correlate(album_table)
+        .scalar_subquery()
+    )
+    first_media_id_subquery = (
+        select(Media.id)
+        .where(Media.album_id == album_table.c.id)
+        .order_by(Media.created_at.asc(), name_numeric.asc(), name_base.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    first_media_preview_subquery = (
+        select(Media.preview_path)
+        .where(Media.album_id == album_table.c.id)
+        .order_by(Media.created_at.asc(), name_numeric.asc(), name_base.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    first_media_storage_subquery = (
+        select(Media.storage_path)
+        .where(Media.album_id == album_table.c.id)
+        .order_by(Media.created_at.asc(), name_numeric.asc(), name_base.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    first_media_type_subquery = (
+        select(Media.type)
+        .where(Media.album_id == album_table.c.id)
+        .order_by(Media.created_at.asc(), name_numeric.asc(), name_base.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+    count_column = func.coalesce(media_count_subquery, 0).label("media_count")
+    query = (
+        select(
+            album_table.c.id,
+            album_table.c.title,
+            album_table.c.visibility,
+            album_table.c.created_at,
+            album_table.c.owner_id,
+            album_table.c.cover_media_id,
+            count_column,
+            first_media_id_subquery.label("first_media_id"),
+            first_media_preview_subquery.label("first_media_preview_path"),
+            first_media_storage_subquery.label("first_media_storage_path"),
+            first_media_type_subquery.label("first_media_type"),
+        )
+        .select_from(album_table)
+    )
     if visibility:
         _validate_visibility(visibility)
-        query = query.where(Album.visibility == visibility)
+        query = query.where(album_table.c.visibility == visibility)
 
     if current_user.role != "developer":
-        query = query.where((Album.visibility != "private") | (Album.owner_id == current_user.id))
+        query = query.where((album_table.c.visibility != "private") | (album_table.c.owner_id == current_user.id))
 
-    albums = session.execute(query.order_by(Album.created_at.desc())).scalars().all()
-    return success([_album_dict(album) for album in albums])
+    query = query.order_by(album_table.c.created_at.desc())
+    rows = session.execute(query).all()
+    payload = [
+        {
+            "id": row.id,
+            "title": row.title,
+            "visibility": row.visibility,
+            "created_at": row.created_at,
+            "owner_id": row.owner_id,
+            "cover_media_id": row.cover_media_id,
+            "media_count": row.media_count,
+            "first_media_id": row.first_media_id,
+            "first_media_preview_path": row.first_media_preview_path,
+            "first_media_storage_path": row.first_media_storage_path,
+            "first_media_type": row.first_media_type,
+        }
+        for row in rows
+    ]
+    return success(payload)
 
 
 @router.post("")
@@ -67,7 +153,18 @@ def create_album(body: AlbumCreate, session: SessionDep, current_user: User = De
     session.add(album)
     session.commit()
     session.refresh(album)
-    return success(_album_dict(album))
+    media_count = session.execute(select(func.count(Media.id)).where(Media.album_id == album.id)).scalar_one()
+    first_id, first_preview, first_storage, first_type = _first_media_info(session, album.id)
+    return success(
+        _album_dict(
+            album,
+            media_count=media_count,
+            first_media_id=first_id,
+            first_media_preview=first_preview,
+            first_media_storage=first_storage,
+            first_media_type=first_type,
+        )
+    )
 
 
 @router.patch("/{album_id}")
@@ -95,7 +192,18 @@ def update_album(
 
     session.commit()
     session.refresh(album)
-    return success(_album_dict(album))
+    media_count = session.execute(select(func.count(Media.id)).where(Media.album_id == album.id)).scalar_one()
+    first_id, first_preview, first_storage, first_type = _first_media_info(session, album.id)
+    return success(
+        _album_dict(
+            album,
+            media_count=media_count,
+            first_media_id=first_id,
+            first_media_preview=first_preview,
+            first_media_storage=first_storage,
+            first_media_type=first_type,
+        )
+    )
 
 
 @router.delete("/{album_id}")
@@ -106,3 +214,15 @@ def delete_album(album_id: int, session: SessionDep, current_user: User = Depend
     session.delete(album)
     session.commit()
     return success(message="DELETED")
+def _first_media_info(session: SessionDep, album_id: int) -> tuple[Optional[int], Optional[str], Optional[str], Optional[str]]:
+    name_base = func.substring_index(Media.filename, ".", 1)
+    name_numeric = func.cast(name_base, MySQLInteger(unsigned=True))
+    row = session.execute(
+        select(Media.id, Media.preview_path, Media.storage_path, Media.type)
+        .where(Media.album_id == album_id)
+        .order_by(Media.created_at.asc(), name_numeric.asc(), name_base.asc())
+        .limit(1)
+    ).first()
+    if not row:
+        return None, None, None, None
+    return row.id, row.preview_path, row.storage_path, row.type

@@ -1,87 +1,114 @@
-import React, { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import MediaCard from "../components/MediaCard";
-import { useMediaList } from "../hooks/useMediaList";
+import { useCategoryMedia } from "../hooks/useCategoryMedia";
+import { useHomeSections } from "../hooks/useHomeSections";
 
-export default function Gallery() {
-  const [params, setParams] = useSearchParams();
-  const type = params.get("type") || "all";
-  const page = Number.parseInt(params.get("page") || "1", 10);
-  const size = 12;
-
-  const { data, isLoading, isError, error, isFetching } = useMediaList({
-    type: type === "all" ? undefined : type,
-    page,
-    size,
+function CategoryPreviewSection({ section, albumIds, type, isConfigLoading }) {
+  const rows = Math.max(1, section.preview_rows || 1);
+  const { data, isLoading, isError, error } = useCategoryMedia({
+    albumIds,
+    page: 1,
+    size: rows * 4,
+    type,
   });
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / size));
+  const shouldShowMore = total > rows * 4;
+  const search = type === "all" ? "" : `?type=${type}`;
 
-  const showInitialLoading = isLoading && items.length === 0;
-  const isEmpty = !showInitialLoading && items.length === 0;
-
-  useEffect(() => {
-    if (!showInitialLoading && page > totalPages) {
-      const safePage = Math.max(1, totalPages);
-      if (safePage !== page) {
-        const next = new URLSearchParams(params);
-        next.set("page", String(safePage));
-        setParams(next, { replace: true });
-      }
+  const renderBody = () => {
+    if (isConfigLoading && albumIds.length === 0) {
+      return <div>正在加载分类信息…</div>;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInitialLoading, page, totalPages]);
-
-  const goToPage = (nextPage) => {
-    if (nextPage === page || nextPage < 1 || nextPage > totalPages) return;
-    const next = new URLSearchParams(params);
-    next.set("page", String(nextPage));
-    setParams(next, { replace: true });
+    if (albumIds.length === 0) {
+      return (
+        <div style={{ color: "rgba(50,44,84,0.6)" }}>
+          暂未找到对应相册，请在控制中心的「主页」设置中为「{section.title}」选择相册。
+        </div>
+      );
+    }
+    if (isLoading) {
+      return <div>加载 {section.title} …</div>;
+    }
+    if (isError) {
+      return <div style={{ color: "#dc2626" }}>{error?.message || "加载失败"}</div>;
+    }
+    if (items.length === 0) {
+      return <div style={{ color: "rgba(50,44,84,0.6)" }}>该分类暂无内容，稍后再来看看吧。</div>;
+    }
+    return (
+      <div className="card-grid">
+        {items.map((item) => (
+          <MediaCard key={item.id} item={item} />
+        ))}
+      </div>
+    );
   };
+
+  return (
+    <section style={{ marginBottom: 40 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
+        <h3 style={{ fontSize: 22, fontWeight: 700 }}>
+          {section.title}
+          <span style={{ fontSize: 13, marginLeft: 8, color: "rgba(50,44,84,0.6)" }}>
+            预览 {rows} 排（{rows * 4} 个）
+          </span>
+        </h3>
+        {shouldShowMore && (
+          <Link
+            to={`/collections/${section.key}${search}`}
+            className="button-secondary"
+            style={{ padding: "6px 16px" }}
+          >
+            more
+          </Link>
+        )}
+      </div>
+      {renderBody()}
+    </section>
+  );
+}
+
+export default function Gallery() {
+  const [params] = useSearchParams();
+  const type = params.get("type") || "all";
+
+  const { data: sections, isLoading: sectionsLoading } = useHomeSections();
+
+  const sectionAlbumMap = useMemo(() => {
+    if (!sections) {
+      return new Map();
+    }
+    return new Map(
+      sections.map((section) => [section.key, section.album_ids])
+    );
+  }, [sections]);
+
+  const orderedSections = sections ?? [];
 
   return (
     <section>
       <header className="page-header">
-        <h2 className="page-title">媒体库</h2>
-        <p className="page-subtitle">支持按类型筛选，可随时进入详情页查看大图或视频。</p>
+        <h2 className="page-title">Suzuhara 精选</h2>
+        <p className="page-subtitle">按照控制中心配置的分类展示最新内容，点击分类或更多按钮可继续浏览。</p>
       </header>
-      {showInitialLoading && <div>加载媒体中…</div>}
-      {isError && <div style={{ color: "#dc2626" }}>{error?.message || "加载失败"}</div>}
-      {!isEmpty ? (
-        <>
-          <div className="card-grid">
-            {items.map((item) => (
-              <MediaCard key={item.id} item={item} />
-            ))}
-          </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
-            <button
-              type="button"
-              onClick={() => goToPage(Math.max(1, page - 1))}
-              disabled={page <= 1 || isFetching}
-              className="button-secondary"
-              >
-              上一页
-            </button>
-            <span style={{ alignSelf: "center", fontSize: 14 }}>
-              第 {page} 页 / 共 {totalPages} 页
-            </span>
-            <button
-              type="button"
-              onClick={() => goToPage(Math.min(totalPages, page + 1))}
-              disabled={page >= totalPages || isFetching}
-              className="button-secondary"
-            >
-              下一页
-            </button>
-          </div>
-          {isFetching && !showInitialLoading && <div style={{ marginTop: 12, textAlign: "center", fontSize: 13, color: "rgba(50,44,84,0.6)" }}>正在加载更多媒体…</div>}
-        </>
-      ) : (
-        !showInitialLoading && <div>暂无媒体内容</div>
+      {sectionsLoading && <div>加载分类中…</div>}
+      {!sectionsLoading && orderedSections.length === 0 && (
+        <div style={{ color: "rgba(50,44,84,0.6)", marginTop: 16 }}>
+          暂无首页分类，请在控制中心新增分类。
+        </div>
       )}
+      {orderedSections.map((section) => (
+        <CategoryPreviewSection
+          key={section.id}
+          section={section}
+          albumIds={sectionAlbumMap.get(section.key) || []}
+          type={type}
+          isConfigLoading={sectionsLoading}
+        />
+      ))}
     </section>
   );
 }

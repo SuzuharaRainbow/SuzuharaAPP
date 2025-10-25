@@ -144,6 +144,57 @@ def _seed_social_posts(session: Session) -> None:
     session.add_all([post1, post2])
     session.commit()
 
+
+def _seed_home_sections(session: Session) -> None:
+    from sqlalchemy import select, text
+    from .models import HomeSection
+
+    # migrate legacy schema if needed
+    columns = session.execute(text("SHOW COLUMNS FROM home_sections LIKE 'preview_rows'"))
+    has_preview_rows = columns.first() is not None
+    if not has_preview_rows:
+        session.execute(text("ALTER TABLE home_sections ADD COLUMN preview_rows INT NOT NULL DEFAULT 1"))
+        session.commit()
+
+    legacy = session.execute(text("SHOW COLUMNS FROM home_sections LIKE 'preview_limit'"))
+    has_legacy = legacy.first() is not None
+    if has_legacy:
+        session.execute(text(
+            "UPDATE home_sections SET preview_rows = LEAST(4, GREATEST(1, CEIL(preview_limit / 4)))"
+        ))
+        session.commit()
+        try:
+            session.execute(text("ALTER TABLE home_sections DROP COLUMN preview_limit"))
+            session.commit()
+        except Exception:  # noqa: BLE001
+            session.rollback()
+
+    defaults = [
+        {"key": "photos", "title": "照片", "preview_rows": 2},
+        {"key": "broadcast", "title": "广播", "preview_rows": 1},
+        {"key": "live", "title": "生放送", "preview_rows": 1},
+        {"key": "xspace", "title": "Xspace", "preview_rows": 1},
+    ]
+
+    for index, item in enumerate(defaults):
+        section = session.execute(select(HomeSection).where(HomeSection.key == item["key"])).scalar_one_or_none()
+        if section:
+            section.title = item["title"]
+            section.preview_rows = item["preview_rows"]
+            section.order_index = index
+        else:
+            session.add(
+                HomeSection(
+                    key=item["key"],
+                    title=item["title"],
+                    preview_rows=item["preview_rows"],
+                    order_index=index,
+                )
+            )
+
+    session.commit()
+
+
 def init_db() -> None:
     from . import models  # noqa: F401 ensure models are registered
 
@@ -157,3 +208,4 @@ def init_db() -> None:
         except Exception:
             session.rollback()
         _seed_social_posts(session)
+        _seed_home_sections(session)

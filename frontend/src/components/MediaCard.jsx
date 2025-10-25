@@ -9,6 +9,13 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
+function stripExtension(name) {
+  if (!name || typeof name !== "string") return name;
+  const lastDot = name.lastIndexOf(".");
+  if (lastDot <= 0) return name;
+  return name.slice(0, lastDot);
+}
+
 export default function MediaCard({ item }) {
   const [previewError, setPreviewError] = useState(false);
   const cacheBuster = item.updated_at || item.created_at || item.taken_at || `${item.id}`;
@@ -16,7 +23,8 @@ export default function MediaCard({ item }) {
     ? `${api.defaults.baseURL}/media/${item.id}/preview?t=${encodeURIComponent(cacheBuster)}`
     : `${api.defaults.baseURL}/media/${item.id}/file?t=${encodeURIComponent(cacheBuster)}`;
 
-  const title = item.title || item.filename || "未命名";
+  const rawTitle = item.title || item.filename || "未命名";
+  const title = stripExtension(rawTitle);
   const isVideo = item.type === "video";
 
   const renderThumb = () => {

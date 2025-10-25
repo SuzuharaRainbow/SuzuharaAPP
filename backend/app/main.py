@@ -13,6 +13,7 @@ from .auth.routes import router as auth_router
 from .config import settings
 from .db import init_db
 from .media.routes import router as media_router
+from .home_sections.routes import router as home_sections_router
 from .tags.routes import router as tags_router
 from .social.routes import router as social_router
 from .utils.api import AppError, success
@@ -84,6 +85,7 @@ app.include_router(albums_router)
 app.include_router(media_router)
 app.include_router(tags_router)
 app.include_router(social_router)
+app.include_router(home_sections_router)
 
 
 @app.on_event("startup")

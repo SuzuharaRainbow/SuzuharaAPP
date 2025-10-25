@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -223,8 +224,27 @@ def list_media(
         count_query = count_query.join(Album, isouter=True).where(visibility_condition)
 
     order_column = Media.created_at if sort == "created_at" else Media.taken_at
-    # MySQL 的 ORDER BY 不支持 NULLS LAST 关键字，改用布尔表达式实现：False(0)=非空在前，True(1)=空在后
-    query = query.order_by(order_column.is_(None), order_column.desc())
+    name_base = func.substring_index(Media.filename, ".", 1)
+    name_numeric = func.cast(name_base, MySQLInteger(unsigned=True))
+
+    if sort == "created_at":
+        date_bucket = func.date(Media.created_at)
+        query = query.order_by(
+            date_bucket.is_(None),
+            date_bucket.asc(),
+            Media.created_at.asc(),
+            name_numeric.asc(),
+            name_base.asc(),
+            Media.id.asc(),
+        )
+    else:
+        query = query.order_by(
+            order_column.is_(None),
+            order_column.asc(),
+            name_numeric.asc(),
+            name_base.asc(),
+            Media.id.asc(),
+        )
 
     total = session.execute(count_query).scalar_one()
     items = (

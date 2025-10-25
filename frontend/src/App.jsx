@@ -3,13 +3,18 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "./api";
 import { useMe } from "./hooks/useMe";
-import MediaTypeToggle from "./components/MediaTypeToggle";
 import mascot from "./assets/mascot.png";
 
-const navLinkClass = (locationPath, target) =>
-  locationPath === target || (target !== "/" && locationPath.startsWith(target))
+const navLinkClass = (locationPath, target) => {
+  if (target === "/") {
+    return locationPath === "/" || locationPath.startsWith("/collections")
+      ? "nav-link is-active"
+      : "nav-link";
+  }
+  return locationPath === target || (target !== "/" && locationPath.startsWith(target))
     ? "nav-link is-active"
     : "nav-link";
+};
 
 export default function App() {
   const { data: user, isLoading } = useMe();
@@ -26,9 +31,6 @@ export default function App() {
   });
 
   const onLogout = () => logoutMutation.mutate();
-
-  const showTypeToggle =
-    location.pathname === "/" || location.pathname.startsWith("/albums");
 
   return (
     <div className="app-root">
@@ -64,14 +66,32 @@ export default function App() {
             </span>
           </nav>
           <div className="app-user">
-            {showTypeToggle && <MediaTypeToggle />}
             {isLoading ? (
               <span style={{ color: "rgba(50, 44, 84, 0.55)", fontSize: 14 }}>加载中…</span>
             ) : user ? (
               <>
-                <span style={{ fontSize: 14, color: "var(--brand-ink)" }}>
-                  {user.username}（{user.role === "developer" ? "开发者" : "访客"}）
-                </span>
+                {user.role === "developer" ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/control")}
+                    style={{
+                      fontSize: 14,
+                      color: "var(--brand-ink)",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 4,
+                    }}
+                  >
+                    {user.username}（开发者）
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 14, color: "var(--brand-ink)" }}>
+                    {user.username}（访客）
+                  </span>
+                )}
                 <button type="button" onClick={onLogout} className="button-primary" style={{ padding: "8px 16px" }}>
                   登出
                 </button>

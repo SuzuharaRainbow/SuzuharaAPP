@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     Boolean,
 )
+from sqlalchemy.dialects.mysql import BIGINT as MySQLBigInt
 from sqlalchemy.orm import Mapped, mapped_column, relationship, foreign
 
 from .db import Base
@@ -57,6 +58,11 @@ class Album(Base):
         back_populates="album",
         foreign_keys=lambda: [Media.album_id],
         primaryjoin=lambda: Album.id == foreign(Media.album_id),
+    )
+    home_sections: Mapped[list["HomeSectionAlbum"]] = relationship(
+        "HomeSectionAlbum",
+        back_populates="album",
+        cascade="all, delete-orphan",
     )
 
 
@@ -178,3 +184,39 @@ class SocialReply(Base):
     permalink: Mapped[Optional[str]] = mapped_column(String(512))
 
     post: Mapped[SocialPost] = relationship(back_populates="replies")
+
+
+class HomeSection(Base):
+    __tablename__ = "home_sections"
+    __table_args__ = (
+        UniqueConstraint("key", name="uq_home_section_key"),
+    )
+
+    id: Mapped[int] = mapped_column(MySQLBigInt(unsigned=True), primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    preview_rows: Mapped[int] = mapped_column(Integer, default=1)
+    order_index: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    albums: Mapped[list["HomeSectionAlbum"]] = relationship(
+        "HomeSectionAlbum",
+        back_populates="section",
+        cascade="all, delete-orphan",
+        order_by="HomeSectionAlbum.order_index",
+    )
+
+
+class HomeSectionAlbum(Base):
+    __tablename__ = "home_section_albums"
+    __table_args__ = (
+        UniqueConstraint("section_id", "album_id", name="uq_home_section_album"),
+    )
+
+    id: Mapped[int] = mapped_column(MySQLBigInt(unsigned=True), primary_key=True, autoincrement=True)
+    section_id: Mapped[int] = mapped_column(MySQLBigInt(unsigned=True), ForeignKey("home_sections.id", ondelete="CASCADE"), nullable=False)
+    album_id: Mapped[int] = mapped_column(MySQLBigInt(unsigned=True), ForeignKey("albums.id", ondelete="CASCADE"), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    section: Mapped[HomeSection] = relationship(back_populates="albums")
+    album: Mapped[Album] = relationship(back_populates="home_sections")

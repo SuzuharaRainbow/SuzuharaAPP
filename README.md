@@ -18,8 +18,9 @@
 - `backend/` – FastAPI 应用源码，SQLAlchemy 模型、依赖和路由都在 `app/` 目录。
 - `infra/` – 实际使用的 Docker 部署脚本、环境文件与持久化目录。
   - `docker-compose.yml` – 同时启动 MySQL、后端与前端。
+  - `docker-compose.prod.yml` – 生产部署用编排文件（Nginx + 构建后前端 + FastAPI + MySQL）。
   - `start-ui.sh` – 一键执行 `docker compose up`，前端以前台模式运行。
-  - `backend.env` / `frontend.env` – 容器内进程读取的环境变量。
+  - `backend.env` / `frontend.env` / `backend.prod.env` / `mysql.prod.env` – 开发/生产环境变量模板。
   - `data/` – 主机上的 MySQL 与媒体文件存放目录。
 - `.env.dev` – 本地直接运行后端时使用的设置，变量与 `infra/backend.env` 保持一致。
 
@@ -118,6 +119,51 @@ docker compose down         # 停止并保留数据卷
 - **同步依赖**：`frontend/` 下使用 `npm install`，`backend/` 可在本机虚拟环境中执行 `pip install -r requirements.txt`（容器内镜像已预装）。
 - **调整 JWT 或 CORS**：修改 `.env.dev` 或 `infra/backend.env` 后，运行 `docker compose restart api`。
 - **修改前端环境**：编辑 `infra/frontend.env`，随后 `docker compose restart web`。
+
+## 生产部署指南（Docker）
+
+本仓库已经准备好生产环境所需的构建脚本，步骤如下：
+
+1. **准备配置文件**
+   ```bash
+   cp infra/backend.prod.env infra/backend.prod.env.local   # 修改 JWT_SECRET / CORS / DB_URL 等敏感信息
+   cp infra/mysql.prod.env infra/mysql.prod.env.local       # 修改数据库密码
+   ```
+   > 推荐将 `.local` 版本加入 `.gitignore`，避免把真实密码提交到仓库。
+
+2. **构建镜像**
+   ```bash
+   cd infra
+   docker compose -f docker-compose.prod.yml build
+   ```
+   `frontend` 服务会使用 `frontend/Dockerfile`，在构建阶段执行 `npm ci && npm run build` 并默认将 `VITE_API_BASE` 设置为 `/api`。如需指向其他域名，可通过 `--build-arg VITE_API_BASE=https://example.com/api` 覆盖。
+
+3. **启动服务**
+   ```bash
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+   - `web` 服务由 Nginx 提供静态页与反向代理，配置文件位于 `infra/nginx.prod.conf`，默认监听 80 端口并将 `/api/*` 转发到 FastAPI。
+   - `api` 服务使用 `backend/Dockerfile` 构建后的镜像，默认挂载 `infra/data/media` 以持久化上传文件。
+   - `mysql` 服务挂载 `infra/data/mysql`，同时复用 `infra/mysql/init.sql` 初始化表结构。
+
+4. **启用 HTTPS（可选但推荐）**
+   - 在服务器上安装 `certbot`，或通过 cloud provider 申请证书。
+   - 将证书路径写入 `infra/nginx.prod.conf`（监听 443，添加 `ssl_certificate` / `ssl_certificate_key`），并在 compose 中开放 443 端口：
+     ```yaml
+     ports:
+       - "80:80"
+       - "443:443"
+     ```
+   - 重启 `web` 服务：`docker compose -f docker-compose.prod.yml restart web`
+
+5. **滚动更新**
+   每次更新代码后：
+   ```bash
+   docker compose -f docker-compose.prod.yml build web api
+   docker compose -f docker-compose.prod.yml up -d web api
+   ```
+
+> 生产环境下记得关闭未用端口、防火墙只开放 80/443，并将 `backend.prod.env` 中的 `CORS_ORIGINS` 设置为你的正式域名。
 
 ## 参考 API
 

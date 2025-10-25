@@ -73,6 +73,7 @@ export default function Albums() {
   };
 
   const isDeveloper = user?.role === "developer";
+  const baseURL = api.defaults.baseURL || "";
   const orderedAlbums = useMemo(() => albums || [], [albums]);
   return (
     <section>
@@ -101,14 +102,36 @@ export default function Albums() {
       {isError && <div style={{ color: "#dc2626" }}>{error?.message || "加载失败"}</div>}
 
       <div style={{ display: "grid", gap: 16 }}>
-        {orderedAlbums.map((album) => (
-          <div key={album.id} className="album-card">
-            <div style={{ flex: "1 1 auto" }}>
-              <div className="album-card__title">{album.title}</div>
-              <div className="album-card__meta">
-                可见性：{album.visibility} ｜ 创建于 {new Date(album.created_at).toLocaleString()}
+        {orderedAlbums.map((album) => {
+          const cacheKey = album.first_media_id || album.id;
+          const hasPreview = album.first_media_id;
+          const previewEndpoint = hasPreview
+            ? album.first_media_preview_path
+              ? `/media/${album.first_media_id}/preview`
+              : album.first_media_type === "image"
+                ? `/media/${album.first_media_id}/file`
+                : null
+            : null;
+          const previewUrl = previewEndpoint
+            ? `${baseURL}${previewEndpoint}?t=${encodeURIComponent(cacheKey)}`
+            : null;
+
+          return (
+            <div key={album.id} className="album-card">
+              <div className="album-card__thumb">
+                {previewUrl ? (
+                  <img src={previewUrl} alt={`${album.title} 缩略图`} loading="lazy" />
+                ) : (
+                  <div className="album-card__thumb--placeholder">无封面</div>
+                )}
               </div>
-            </div>
+              <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+                <div className="album-card__title">{album.title}</div>
+                <div className="album-card__meta">
+                  可见性：{album.visibility} ｜ 创建于 {new Date(album.created_at).toLocaleString()}
+                </div>
+                <div className="album-card__meta">媒体数量：{album.media_count ?? 0}</div>
+              </div>
             <Link to={`/albums/${album.id}`} className="pill-button">
               查看
             </Link>
@@ -132,7 +155,8 @@ export default function Albums() {
               </>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {!isLoading && orderedAlbums.length === 0 && <div style={{ marginTop: 24 }}>暂无相册</div>}
