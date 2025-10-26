@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api";
@@ -64,11 +64,35 @@ export default function MediaDetail() {
   if (isLoading) return <div>加载详情中…</div>;
   if (isError) return <div style={{ color: "#dc2626" }}>{error?.message || "加载失败"}</div>;
 
-  const media = data;
-  if (!media) return <div>未找到媒体</div>;
+  const rawMedia = data;
+  const fallbackMedia = !rawMedia && role === "viewer" ? location.state?.media ?? null : null;
+  const media = rawMedia || fallbackMedia;
 
-  const fileURL = `${api.defaults.baseURL}/media/${id}/file?v=${media.sha256 || "preview"}`;
-  const previewURL = media.preview_path
+  if (!media) {
+    return (
+      <section>
+        <button
+          type="button"
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 8,
+            border: "1px solid #d1d5db",
+            background: "#fff",
+            color: "#1f2937",
+            cursor: "pointer",
+          }}
+        >
+          ← 返回
+        </button>
+        <div style={{ marginTop: 24, color: "#4b5563" }}>该媒体暂时不可访问，请稍后再试。</div>
+      </section>
+    );
+  }
+
+  const hasFullData = !!rawMedia;
+  const fileURL = hasFullData ? `${api.defaults.baseURL}/media/${id}/file?v=${media.sha256 || "preview"}` : null;
+  const previewURL = hasFullData && media.preview_path
     ? `${api.defaults.baseURL}/media/${id}/preview?v=${media.sha256 || "preview"}`
     : undefined;
 
@@ -91,48 +115,16 @@ export default function MediaDetail() {
     tagMutation.mutate(tags);
   };
 
-  const infoList = useMemo(() => {
-    if (!canEdit) return null;
-    return (
-      <div style={{ marginTop: 16, fontSize: 14, color: "#4b5563" }}>
-        <div>文件名：{media.filename ?? "--"}</div>
-        <div>类型：{media.mime_type ?? "--"}</div>
-        <div>大小：{media.bytes ? (media.bytes / 1024 / 1024).toFixed(2) : "--"} MB</div>
-        <div>创建时间：{media.created_at ? new Date(media.created_at).toLocaleString() : "--"}</div>
-        {media.taken_at && <div>拍摄时间：{new Date(media.taken_at).toLocaleString()}</div>}
-        <div>标签：{media.tags?.length ? media.tags.join(", ") : "无"}</div>
-      </div>
-    );
-  }, [canEdit, media]);
-
-  if (!media && role === "viewer") {
-    const fallback = location.state?.media;
-    if (fallback) {
-      return (
-        <section>
-          <button
-            type="button"
-            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 8,
-              border: "1px solid #d1d5db",
-              background: "#fff",
-              color: "#1f2937",
-              cursor: "pointer",
-            }}
-          >
-            ← 返回
-          </button>
-          <div style={{ marginTop: 24 }}>
-            <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>{fallback.title || "无标题"}</h2>
-            <div style={{ fontSize: 14, color: "#4b5563" }}>该媒体暂时不可访问，请稍后再试。</div>
-          </div>
-        </section>
-      );
-    }
-    return <div>未找到媒体</div>;
-  }
+  const infoList = canEdit && hasFullData ? (
+    <div style={{ marginTop: 16, fontSize: 14, color: "#4b5563" }}>
+      <div>文件名：{media.filename ?? "--"}</div>
+      <div>类型：{media.mime_type ?? "--"}</div>
+      <div>大小：{media.bytes ? (media.bytes / 1024 / 1024).toFixed(2) : "--"} MB</div>
+      <div>创建时间：{media.created_at ? new Date(media.created_at).toLocaleString() : "--"}</div>
+      {media.taken_at && <div>拍摄时间：{new Date(media.taken_at).toLocaleString()}</div>}
+      <div>标签：{media.tags?.length ? media.tags.join(", ") : "无"}</div>
+    </div>
+  ) : null;
 
   return (
     <section
@@ -159,31 +151,46 @@ export default function MediaDetail() {
         </button>
       </div>
       <div>
-        {media.type === "video" ? (
+        {hasFullData && media.type === "video" ? (
           <video
-            key={fileURL}
+            key={fileURL || "video"}
             src={fileURL}
             controls
             poster={previewURL}
             style={{ width: "100%", maxHeight: 520, borderRadius: 12, background: "#000" }}
           />
-        ) : (
+        ) : hasFullData ? (
           <img
-            key={fileURL}
+            key={fileURL || "image"}
             src={fileURL}
             alt={media.title}
             style={{ width: "100%", borderRadius: 12, objectFit: "contain", maxHeight: 520, background: "#f3f4f6" }}
           />
-        )}
-        {canEdit ? (
-          infoList
         ) : (
+          <div
+            style={{
+              width: "100%",
+              height: 360,
+              borderRadius: 12,
+              background: "rgba(248,167,208,0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "rgba(50,44,84,0.6)",
+              fontSize: 16,
+            }}
+          >
+            该媒体暂时不可播放
+          </div>
+        )}
+        {infoList}
+        {!canEdit && (
           <div style={{ marginTop: 16, fontSize: 18, fontWeight: 600, color: "#1f2937" }}>
             {media.title || "无标题"}
           </div>
         )}
       </div>
-      {canEdit && (
+      {canEdit && hasFullData && (
         <div>
           <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>元数据</h3>
           {feedback && <div style={{ marginBottom: 16, color: "var(--brand-ink)" }}>{feedback}</div>}
