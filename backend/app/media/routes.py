@@ -3,14 +3,15 @@ from __future__ import annotations
 import hashlib
 import logging
 import mimetypes
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterator, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
@@ -175,6 +176,59 @@ def _generate_video_preview(rel_path: Path) -> Optional[str]:
     return None
 
 
+def _file_iterator(path: Path, start: int, end: int) -> Iterator[bytes]:
+    chunk_size = 1024 * 512  # 512KB
+    with path.open("rb") as file:
+        file.seek(start)
+        bytes_remaining = end - start + 1
+        while bytes_remaining > 0:
+            read_size = min(chunk_size, bytes_remaining)
+            data = file.read(read_size)
+            if not data:
+                break
+            bytes_remaining -= len(data)
+            yield data
+
+
+def _serve_file(*, path: Path, request: Request, media_type: str, filename: str) -> StreamingResponse | FileResponse:
+    file_size = path.stat().st_size
+    range_header = request.headers.get("range")
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f"inline; filename=\"{filename}\"",
+    }
+
+    if range_header:
+        range_match = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        if range_match:
+            start = int(range_match.group(1))
+            end_str = range_match.group(2)
+            end = int(end_str) if end_str else file_size - 1
+            end = min(end, file_size - 1)
+            if start >= file_size:
+                start = file_size - 1
+            if end < start:
+                end = start
+            response = StreamingResponse(
+                _file_iterator(path, start, end),
+                media_type=media_type,
+                status_code=206,
+                headers={
+                    **headers,
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Content-Length": str(end - start + 1),
+                },
+            )
+            return response
+
+    return FileResponse(
+        str(path),
+        media_type=media_type,
+        filename=filename,
+        headers=headers,
+    )
+
+
 def _ensure_album(session: Session, album_id: Optional[int], user: User) -> None:
     if album_id is None:
         return
@@ -286,7 +340,7 @@ def get_media(media_id: int, session: SessionDep, current_user: User = Depends(r
 
 
 @router.get("/{media_id}/file")
-def download_media(media_id: int, session: SessionDep, current_user: User = Depends(require_user)):
+def download_media(media_id: int, request: Request, session: SessionDep, current_user: User = Depends(require_user)):
     media = session.get(Media, media_id)
     if not media:
         raise AppError(status_code=404, code=40400, message="MEDIA_NOT_FOUND")
@@ -294,11 +348,11 @@ def download_media(media_id: int, session: SessionDep, current_user: User = Depe
     file_path = Path(settings.MEDIA_ROOT) / media.storage_path
     if not file_path.exists():
         raise AppError(status_code=404, code=40400, message="FILE_NOT_FOUND")
-    return FileResponse(str(file_path), media_type=media.mime_type, filename=media.filename)
+    return _serve_file(path=file_path, request=request, media_type=media.mime_type, filename=media.filename)
 
 
 @router.get("/{media_id}/preview")
-def download_media_preview(media_id: int, session: SessionDep, current_user: User = Depends(require_user)):
+def download_media_preview(media_id: int, request: Request, session: SessionDep, current_user: User = Depends(require_user)):
     media = session.get(Media, media_id)
     if not media:
         raise AppError(status_code=404, code=40400, message="MEDIA_NOT_FOUND")
@@ -308,7 +362,7 @@ def download_media_preview(media_id: int, session: SessionDep, current_user: Use
     preview_path = Path(settings.MEDIA_ROOT) / media.preview_path
     if not preview_path.exists():
         raise AppError(status_code=404, code=40400, message="PREVIEW_NOT_FOUND")
-    return FileResponse(str(preview_path), media_type="image/jpeg", filename=f"preview-{media.filename}.jpg")
+    return _serve_file(path=preview_path, request=request, media_type="image/jpeg", filename=f"preview-{media.filename}.jpg")
 
 
 async def _store_file(upload: UploadFile, *, size_limit: int) -> tuple[Path, int, str]:
