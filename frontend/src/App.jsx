@@ -52,7 +52,10 @@ export default function App() {
   const isManager = role === "manager";
   const isViewer = role === "viewer";
 
-  if (isViewer && location.pathname !== "/") {
+  if (
+    isViewer &&
+    !(location.pathname === "/" || location.pathname.startsWith("/media"))
+  ) {
     return <Navigate to="/" replace />;
   }
 

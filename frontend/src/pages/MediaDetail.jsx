@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api";
 import { useMediaDetail } from "../hooks/useMediaDetail";
 import { useAlbums } from "../hooks/useAlbums";
-import { useRequireDeveloper } from "../hooks/useMe";
+import { useMe } from "../hooks/useMe";
 
 export default function MediaDetail() {
   const { id } = useParams();
@@ -12,22 +12,25 @@ export default function MediaDetail() {
   const queryClient = useQueryClient();
   const { data, isLoading, isError, error } = useMediaDetail(id);
   const { data: albums } = useAlbums();
-  const { user, isDeveloper } = useRequireDeveloper();
+  const { data: currentUser } = useMe();
+
+  const role = currentUser?.role || "viewer";
+  const canEdit = role === "developer" || role === "manager";
+
   const [formState, setFormState] = useState({ title: "", album_id: "", taken_at: "" });
   const [tagsInput, setTagsInput] = useState("");
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    if (data) {
-      const media = data;
+    if (data && canEdit) {
       setFormState({
-        title: media.title || "",
-        album_id: media.album_id ? String(media.album_id) : "",
-        taken_at: media.taken_at ? media.taken_at.slice(0, 16) : "",
+        title: data.title || "",
+        album_id: data.album_id ? String(data.album_id) : "",
+        taken_at: data.taken_at ? data.taken_at.slice(0, 16) : "",
       });
-      setTagsInput(media.tags?.join(",") || "");
+      setTagsInput(data.tags?.join(",") || "");
     }
-  }, [data]);
+  }, [data, canEdit]);
 
   const updateMutation = useMutation({
     mutationFn: (payload) => api.patch(`/media/${id}`, payload),
@@ -87,8 +90,28 @@ export default function MediaDetail() {
     tagMutation.mutate(tags);
   };
 
+  const infoList = useMemo(() => {
+    if (!canEdit) return null;
+    return (
+      <div style={{ marginTop: 16, fontSize: 14, color: "#4b5563" }}>
+        <div>文件名：{media.filename ?? "--"}</div>
+        <div>类型：{media.mime_type ?? "--"}</div>
+        <div>大小：{media.bytes ? (media.bytes / 1024 / 1024).toFixed(2) : "--"} MB</div>
+        <div>创建时间：{media.created_at ? new Date(media.created_at).toLocaleString() : "--"}</div>
+        {media.taken_at && <div>拍摄时间：{new Date(media.taken_at).toLocaleString()}</div>}
+        <div>标签：{media.tags?.length ? media.tags.join(", ") : "无"}</div>
+      </div>
+    );
+  }, [canEdit, media]);
+
   return (
-    <section style={{ display: "grid", gap: 24, gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)" }}>
+    <section
+      style={{
+        display: "grid",
+        gap: 24,
+        gridTemplateColumns: canEdit ? "minmax(0, 3fr) minmax(0, 2fr)" : "minmax(0, 1fr)",
+      }}
+    >
       <div style={{ gridColumn: "1 / -1" }}>
         <button
           type="button"
@@ -122,19 +145,18 @@ export default function MediaDetail() {
             style={{ width: "100%", borderRadius: 12, objectFit: "contain", maxHeight: 520, background: "#f3f4f6" }}
           />
         )}
-        <div style={{ marginTop: 16, fontSize: 14, color: "#4b5563" }}>
-          <div>文件名：{media.filename}</div>
-          <div>类型：{media.mime_type}</div>
-          <div>大小：{(media.bytes / 1024 / 1024).toFixed(2)} MB</div>
-          <div>创建时间：{new Date(media.created_at).toLocaleString()}</div>
-          {media.taken_at && <div>拍摄时间：{new Date(media.taken_at).toLocaleString()}</div>}
-          <div>标签：{media.tags?.length ? media.tags.join(", ") : "无"}</div>
-        </div>
+        {canEdit ? (
+          infoList
+        ) : (
+          <div style={{ marginTop: 16, fontSize: 18, fontWeight: 600, color: "#1f2937" }}>
+            {media.title || "无标题"}
+          </div>
+        )}
       </div>
-      <div>
-        <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>元数据</h3>
-        {feedback && <div style={{ marginBottom: 16, color: "#1f2937" }}>{feedback}</div>}
-        {isDeveloper ? (
+      {canEdit && (
+        <div>
+          <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>元数据</h3>
+          {feedback && <div style={{ marginBottom: 16, color: "var(--brand-ink)" }}>{feedback}</div>}
           <>
             <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
               <label>
@@ -200,23 +222,26 @@ export default function MediaDetail() {
                   cursor: "pointer",
                 }}
               >
-                保存修改
+                保存基本信息
               </button>
             </form>
             <div style={{ marginTop: 24 }}>
-              <h4 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>标签</h4>
-              <textarea
-                rows={3}
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                placeholder="使用逗号分隔，例如：旅拍, 团队"
-                style={{
-                  width: "100%",
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #d1d5db",
-                }}
-              />
+              <label>
+                标签
+                <textarea
+                  value={tagsInput}
+                  onChange={(e) => setTagsInput(e.target.value)}
+                  placeholder="多个标签用逗号分隔"
+                  style={{
+                    width: "100%",
+                    minHeight: 96,
+                    padding: "8px 10px",
+                    marginTop: 6,
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                  }}
+                />
+              </label>
               <button
                 type="button"
                 onClick={handleTagsSave}
@@ -226,7 +251,7 @@ export default function MediaDetail() {
                   padding: "8px 16px",
                   borderRadius: 8,
                   border: "none",
-                  background: "#0f766e",
+                  background: "#059669",
                   color: "#fff",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -235,30 +260,26 @@ export default function MediaDetail() {
                 保存标签
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm("确认删除该媒体吗？")) {
-                  deleteMutation.mutate();
-                }
-              }}
-              style={{
-                marginTop: 24,
-                padding: "8px 16px",
-                borderRadius: 8,
-                border: "1px solid #fca5a5",
-                background: "#fee2e2",
-                color: "#b91c1c",
-                cursor: "pointer",
-              }}
-            >
-              删除媒体
-            </button>
+            <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "1px solid #dc2626",
+                  background: deleteMutation.isPending ? "#fee2e2" : "#fff",
+                  color: "#b91c1c",
+                  cursor: "pointer",
+                }}
+              >
+                删除媒体
+              </button>
+            </div>
           </>
-        ) : (
-          <div style={{ color: "#6b7280" }}>您没有编辑权限。</div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }

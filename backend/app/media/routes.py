@@ -56,6 +56,19 @@ def _media_detail(media: Media) -> dict:
     }
 
 
+def _media_public_detail(media: Media) -> dict:
+    return {
+        "id": media.id,
+        "title": media.title,
+        "type": media.type,
+        "mime_type": media.mime_type,
+        "preview_path": media.preview_path,
+        "album_id": media.album_id,
+        "sha256": media.sha256,
+        "created_at": media.created_at,
+    }
+
+
 IMAGE_EXTENSIONS = {
     ".jpg",
     ".jpeg",
@@ -267,6 +280,8 @@ def get_media(media_id: int, session: SessionDep, current_user: User = Depends(r
     if not media:
         raise AppError(status_code=404, code=40400, message="MEDIA_NOT_FOUND")
     _ensure_can_view(media, current_user)
+    if current_user.role == "viewer":
+        return success(_media_public_detail(media))
     return success(_media_detail(media))
 
 
