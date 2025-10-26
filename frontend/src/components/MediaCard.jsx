@@ -16,7 +16,7 @@ function stripExtension(name) {
   return name.slice(0, lastDot);
 }
 
-export default function MediaCard({ item }) {
+export default function MediaCard({ item, linkState }) {
   const [previewError, setPreviewError] = useState(false);
   const cacheBuster = item.updated_at || item.created_at || item.taken_at || `${item.id}`;
   const previewUrl = item.preview_path
@@ -62,8 +62,11 @@ export default function MediaCard({ item }) {
     );
   };
 
+  const linkProps = { pathname: `/media/${item.id}` };
+  const linkStateProp = linkState ? { state: linkState } : undefined;
+
   return (
-    <Link to={`/media/${item.id}`} className="media-card">
+    <Link to={linkProps} state={linkStateProp?.state} className="media-card">
       <div className="media-card__type">{isVideo ? "视频" : "图片"}</div>
       <div className="media-card__thumb">{renderThumb()}</div>
       <div className="media-card__title">{title}</div>

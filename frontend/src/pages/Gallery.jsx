@@ -41,7 +41,7 @@ function CategoryPreviewSection({ section, albumIds, type, isConfigLoading }) {
     return (
       <div className="card-grid">
         {items.map((item) => (
-          <MediaCard key={item.id} item={item} />
+          <MediaCard key={item.id} item={item} linkState={{ media: item }} />
         ))}
       </div>
     );

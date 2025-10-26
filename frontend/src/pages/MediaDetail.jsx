@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api";
 import { useMediaDetail } from "../hooks/useMediaDetail";
@@ -10,6 +10,7 @@ export default function MediaDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const { data, isLoading, isError, error } = useMediaDetail(id);
   const { data: albums } = useAlbums();
   const { data: currentUser } = useMe();
@@ -103,6 +104,35 @@ export default function MediaDetail() {
       </div>
     );
   }, [canEdit, media]);
+
+  if (!media && role === "viewer") {
+    const fallback = location.state?.media;
+    if (fallback) {
+      return (
+        <section>
+          <button
+            type="button"
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: "1px solid #d1d5db",
+              background: "#fff",
+              color: "#1f2937",
+              cursor: "pointer",
+            }}
+          >
+            ← 返回
+          </button>
+          <div style={{ marginTop: 24 }}>
+            <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>{fallback.title || "无标题"}</h2>
+            <div style={{ fontSize: 14, color: "#4b5563" }}>该媒体暂时不可访问，请稍后再试。</div>
+          </div>
+        </section>
+      );
+    }
+    return <div>未找到媒体</div>;
+  }
 
   return (
     <section
