@@ -365,22 +365,40 @@ def download_media_preview(media_id: int, request: Request, session: SessionDep,
     return _serve_file(path=preview_path, request=request, media_type="image/jpeg", filename=f"preview-{media.filename}.jpg")
 
 
-async def _store_file(upload: UploadFile, *, size_limit: int) -> tuple[Path, int, str]:
-    contents = await upload.read()
-    size = len(contents)
-    if size == 0:
-        raise AppError(status_code=400, code=40000, message="EMPTY_FILE")
-    if size > size_limit:
-        raise AppError(status_code=400, code=40001, message="FILE_TOO_LARGE")
-    sha256 = hashlib.sha256(contents).hexdigest()
-
+async def _store_file(upload: UploadFile, *, size_limit: Optional[int]) -> tuple[Path, int, str]:
     ext = Path(upload.filename or "").suffix or mimetypes.guess_extension(upload.content_type or "") or ""
     rel_path = Path(datetime.utcnow().strftime("%Y/%m/%d")) / f"{uuid4().hex}{ext}"
     target_path = Path(settings.MEDIA_ROOT) / rel_path
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_bytes(contents)
 
-    return rel_path, size, sha256
+    sha256 = hashlib.sha256()
+    size = 0
+    chunk_size = 1024 * 1024
+
+    try:
+        with target_path.open("wb") as buffer:
+            while True:
+                chunk = await upload.read(chunk_size)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size_limit is not None and size > size_limit:
+                    raise AppError(status_code=400, code=40001, message="FILE_TOO_LARGE")
+                sha256.update(chunk)
+                buffer.write(chunk)
+    except Exception:
+        if target_path.exists():
+            target_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await upload.close()
+
+    if size == 0:
+        if target_path.exists():
+            target_path.unlink(missing_ok=True)
+        raise AppError(status_code=400, code=40000, message="EMPTY_FILE")
+
+    return rel_path, size, sha256.hexdigest()
 
 
 @router.post("/upload")
@@ -399,7 +417,11 @@ async def upload_media(
 
     created_media = []
     for upload in files:
-        rel_path, size, sha256 = await _store_file(upload, size_limit=settings.MAX_UPLOAD_MB * 1024 * 1024)
+        limit_bytes = None
+        if settings.MAX_UPLOAD_MB and settings.MAX_UPLOAD_MB > 0:
+            limit_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+
+        rel_path, size, sha256 = await _store_file(upload, size_limit=limit_bytes)
 
         mime = upload.content_type or mimetypes.guess_type(upload.filename or "")[0] or "application/octet-stream"
         media_type = _classify_type(mime, upload.filename)
