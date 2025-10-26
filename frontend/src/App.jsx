@@ -54,7 +54,11 @@ export default function App() {
 
   if (
     isViewer &&
-    !(location.pathname === "/" || location.pathname.startsWith("/media"))
+    !(
+      location.pathname === "/" ||
+      location.pathname.startsWith("/media") ||
+      location.pathname.startsWith("/collections")
+    )
   ) {
     return <Navigate to="/" replace />;
   }
