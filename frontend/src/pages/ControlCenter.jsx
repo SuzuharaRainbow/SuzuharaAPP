@@ -5,6 +5,8 @@ import api from "../api";
 import { useRequireDeveloper } from "../hooks/useMe";
 import { useHomeSections } from "../hooks/useHomeSections";
 import { useAlbums } from "../hooks/useAlbums";
+import { useAccessRequests } from "../hooks/useAccessRequests";
+import { useAccounts } from "../hooks/useAccounts";
 
 const cardStyle = {
   background: "var(--card-surface)",
@@ -16,6 +18,8 @@ const cardStyle = {
 const TAB_OPTIONS = [
   { id: "home", label: "主页" },
   { id: "albums", label: "相册" },
+  { id: "requests", label: "访客申请" },
+  { id: "accounts", label: "账号管理" },
 ];
 
 function TabSwitcher({ activeTab, onChange }) {
@@ -653,6 +657,268 @@ function AlbumsTab() {
   );
 }
 
+function AccessRequestsTab() {
+  const queryClient = useQueryClient();
+  const { data: requests = [], isLoading, isError, error } = useAccessRequests();
+  const [feedback, setFeedback] = useState("");
+
+  const approveMutation = useMutation({
+    mutationFn: ({ id, note }) => api.post(`/auth/access-requests/${id}/approve`, note ? { note } : {}),
+    onSuccess: () => {
+      setFeedback("申请已通过，系统已为访客生成只读账号。");
+      queryClient.invalidateQueries(["access-requests"]);
+      queryClient.invalidateQueries(["me"]);
+    },
+    onError: (err) => {
+      setFeedback(err?.message || "操作失败，请稍后重试。");
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ id, note }) => api.post(`/auth/access-requests/${id}/reject`, note ? { note } : {}),
+    onSuccess: () => {
+      setFeedback("申请已拒绝。");
+      queryClient.invalidateQueries(["access-requests"]);
+    },
+    onError: (err) => {
+      setFeedback(err?.message || "操作失败，请稍后重试。");
+    },
+  });
+
+  const handleApprove = (item) => {
+    if (approveMutation.isPending || rejectMutation.isPending) return;
+    const confirmed = window.confirm(`确认通过「${item.username}」的访问申请吗？`);
+    if (!confirmed) return;
+    approveMutation.mutate({ id: item.id, note: "" });
+  };
+
+  const handleReject = (item) => {
+    if (approveMutation.isPending || rejectMutation.isPending) return;
+    const note = window.prompt(`填写拒绝原因（可选），将通知「${item.username}」`, "");
+    rejectMutation.mutate({ id: item.id, note });
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "--";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    return date.toLocaleString();
+  };
+
+  const pendingRequests = requests.filter((item) => item.status === "pending");
+  const processedRequests = requests.filter((item) => item.status !== "pending");
+
+  return (
+    <div style={{ display: "grid", gap: 24 }}>
+      <div style={{ ...cardStyle, padding: 24 }}>
+        <h3 style={{ fontSize: 22, marginBottom: 6 }}>待处理申请</h3>
+        <p style={{ fontSize: 13, color: "rgba(50,44,84,0.65)", marginTop: 0 }}>
+          新访客提交账号申请后，会自动记录在此列表。通过后将创建只读账号，拒绝则会保留记录。
+        </p>
+        {feedback && (
+          <div style={{ marginBottom: 16, color: "var(--brand-ink)" }}>{feedback}</div>
+        )}
+        {isLoading ? (
+          <div>载入申请列表中…</div>
+        ) : isError ? (
+          <div style={{ color: "#dc2626" }}>{error?.message || "加载申请失败"}</div>
+        ) : pendingRequests.length === 0 ? (
+          <div style={{ color: "rgba(50,44,84,0.6)" }}>暂无待处理申请。</div>
+        ) : (
+          <ul style={{ display: "grid", gap: 14, margin: 0, padding: 0, listStyle: "none" }}>
+            {pendingRequests.map((item) => (
+              <li
+                key={item.id}
+                style={{
+                  padding: "16px 18px",
+                  borderRadius: 16,
+                  background: "rgba(255,255,255,0.9)",
+                  border: "1px solid rgba(248,167,208,0.45)",
+                  boxShadow: "var(--shadow-soft)",
+                  display: "grid",
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>{item.username}</div>
+                    <div style={{ fontSize: 12, color: "rgba(50,44,84,0.6)" }}>
+                      提交时间：{formatDateTime(item.created_at)}
+                    </div>
+                  </div>
+                </div>
+                {item.message && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "rgba(50,44,84,0.8)",
+                      background: "rgba(248,167,208,0.12)",
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                    }}
+                  >
+                    {item.message}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button
+                    type="button"
+                    className="button-primary"
+                    onClick={() => handleApprove(item)}
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    style={{ flex: "1 1 auto" }}
+                  >
+                    {approveMutation.isPending ? "处理中…" : "通过申请"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => handleReject(item)}
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    style={{ flex: "1 1 auto", color: "#dc2626", borderColor: "rgba(220,38,38,0.3)" }}
+                  >
+                    {rejectMutation.isPending ? "处理中…" : "拒绝"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div style={{ ...cardStyle, padding: 24 }}>
+        <h3 style={{ fontSize: 20, marginBottom: 12 }}>历史记录</h3>
+        {processedRequests.length === 0 ? (
+          <div style={{ color: "rgba(50,44,84,0.6)" }}>暂无历史记录。</div>
+        ) : (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
+            {processedRequests.map((item) => (
+              <li
+                key={item.id}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 14,
+                  border: "1px solid rgba(248,167,208,0.35)",
+                  background: "rgba(255,255,255,0.85)",
+                  display: "grid",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontWeight: 600 }}>{item.username}</span>
+                  <span
+                    style={{
+                      padding: "2px 10px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      background:
+                        item.status === "approved"
+                          ? "rgba(238,255,209,0.8)"
+                          : "rgba(254,226,226,0.8)",
+                      color: item.status === "approved" ? "#3f6212" : "#b91c1c",
+                    }}
+                  >
+                    {item.status === "approved" ? "已通过" : "已拒绝"}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "rgba(50,44,84,0.6)" }}>
+                  处理时间：{formatDateTime(item.processed_at)}
+                  {item.processed_by?.username ? ` · 审核人：${item.processed_by.username}` : ""}
+                </div>
+                {item.decision_note && (
+                  <div style={{ fontSize: 12, color: "rgba(50,44,84,0.75)" }}>备注：{item.decision_note}</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccountsTab() {
+  const queryClient = useQueryClient();
+  const { data: accounts = [], isLoading, isError, error } = useAccounts();
+  const [feedback, setFeedback] = useState("");
+
+  const updateRole = useMutation({
+    mutationFn: ({ id, role }) => api.post(`/auth/users/${id}/role`, { role }),
+    onSuccess: () => {
+      setFeedback("角色已更新");
+      queryClient.invalidateQueries(["accounts"]);
+    },
+    onError: (err) => {
+      setFeedback(err?.message || "更新失败");
+    },
+  });
+
+  const roleLabel = (role) => {
+    if (role === "developer") return "开发者";
+    if (role === "manager") return "二级管理员";
+    return "访客";
+  };
+
+  return (
+    <div style={{ ...cardStyle, padding: 24 }}>
+      <h3 style={{ fontSize: 22, marginBottom: 6 }}>账号列表</h3>
+      <p style={{ fontSize: 13, color: "rgba(50,44,84,0.65)", marginTop: 0 }}>
+        显示当前系统中所有可登录账号，角色包含访客、二级管理员和开发者。
+      </p>
+      {feedback && <div style={{ marginBottom: 16, color: "var(--brand-ink)" }}>{feedback}</div>}
+      {isLoading ? (
+        <div>加载账号中…</div>
+      ) : isError ? (
+        <div style={{ color: "#dc2626" }}>{error?.message || "加载失败"}</div>
+      ) : accounts.length === 0 ? (
+        <div style={{ color: "rgba(50,44,84,0.6)" }}>暂无账号记录。</div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
+            <thead>
+              <tr style={{ textAlign: "left", background: "rgba(248,167,208,0.15)" }}>
+                <th style={{ padding: "10px 12px", fontWeight: 600 }}>用户名</th>
+                <th style={{ padding: "10px 12px", fontWeight: 600 }}>角色</th>
+                <th style={{ padding: "10px 12px", fontWeight: 600 }}>创建时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((account) => {
+                const isDeveloper = account.role === "developer" || account.username === "developer";
+                return (
+                  <tr key={account.id} style={{ borderTop: "1px solid rgba(248,167,208,0.3)" }}>
+                    <td style={{ padding: "10px 12px" }}>{account.username}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {isDeveloper ? (
+                        <span>开发者（固定）</span>
+                      ) : (
+                        <select
+                          value={account.role}
+                          onChange={(e) => updateRole.mutate({ id: account.id, role: e.target.value })}
+                          disabled={updateRole.isPending}
+                          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid rgba(248,167,208,0.4)" }}
+                        >
+                          <option value="viewer">访客</option>
+                          <option value="manager">二级管理员</option>
+                        </select>
+                      )}
+                    </td>
+                    <td style={{ padding: "10px 12px", color: "rgba(50,44,84,0.65)" }}>
+                      {account.created_at ? new Date(account.created_at).toLocaleString() : "--"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ControlCenter() {
   const navigate = useNavigate();
   const { isLoading, isDeveloper } = useRequireDeveloper();
@@ -696,12 +962,17 @@ export default function ControlCenter() {
     <section>
       <header className="page-header">
         <h2 className="page-title">控制中心</h2>
-        <p className="page-subtitle">统一管理首页分类与相册。分类变更会实时影响首页展示。</p>
+        <p className="page-subtitle">统一管理首页分类、相册内容，以及访客访问申请。</p>
       </header>
 
       <TabSwitcher activeTab={activeTab} onChange={handleTabChange} />
 
-      {activeTab === "home" ? <HomeTab /> : <AlbumsTab />}
+      {(() => {
+        if (activeTab === "home") return <HomeTab />;
+        if (activeTab === "albums") return <AlbumsTab />;
+        if (activeTab === "requests") return <AccessRequestsTab />;
+        return <AccountsTab />;
+      })()}
     </section>
   );
 }

@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api, { ApiError } from "../api";
 import { useAlbums } from "../hooks/useAlbums";
-import { useRequireDeveloper } from "../hooks/useMe";
+import { useRequireManager } from "../hooks/useMe";
 import { useSearchParams } from "react-router-dom";
 
 export default function Upload() {
-  const { isLoading, isDeveloper } = useRequireDeveloper();
+  const { isLoading, isManager } = useRequireManager();
   const [searchParams] = useSearchParams();
   const defaultAlbumParam = searchParams.get("albumId") || searchParams.get("album_id") || "";
   const [files, setFiles] = useState([]);
@@ -69,7 +69,7 @@ export default function Upload() {
   if (isLoading) {
     return <div>加载中…</div>;
   }
-  if (!isDeveloper) {
+  if (!isManager) {
     return <div style={{ color: "#dc2626" }}>您没有权限访问上传页。</div>;
   }
 
@@ -77,7 +77,7 @@ export default function Upload() {
     <section>
       <header className="page-header">
         <h2 className="page-title">批量上传</h2>
-        <p className="page-subtitle">支持多文件同时上传，系统会根据文件类型自动归类为图片或视频。</p>
+        <p className="page-subtitle">管理员与开发者可批量上传媒体，系统会自动判断图片或视频类型。</p>
       </header>
 
       <form className="form-card" onSubmit={(e) => e.preventDefault()}>

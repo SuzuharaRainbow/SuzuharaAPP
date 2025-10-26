@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from ..deps import SessionDep, require_developer, require_user
+from ..deps import SessionDep, require_manager, require_user
 from ..models import Tag, User
 from ..utils.api import AppError, success
 
@@ -23,7 +23,7 @@ def list_tags(session: SessionDep, current_user: User = Depends(require_user)):
 
 
 @router.post("")
-def create_tag(body: TagCreate, session: SessionDep, current_user: User = Depends(require_developer)):
+def create_tag(body: TagCreate, session: SessionDep, current_user: User = Depends(require_manager)):
     name = body.name.strip()
     if not name:
         raise AppError(status_code=400, code=40004, message="INVALID_TAG_NAME")

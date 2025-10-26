@@ -27,6 +27,8 @@ services:
       MEDIA_ROOT: /app/data/media
     volumes:
       - ./data/media:/app/data/media
+    ports:
+      - "8000:8000"
     depends_on:
       mysql:
         condition: service_healthy

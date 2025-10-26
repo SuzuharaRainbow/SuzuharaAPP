@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "./api";
 import { useMe } from "./hooks/useMe";
@@ -32,6 +32,30 @@ export default function App() {
 
   const onLogout = () => logoutMutation.mutate();
 
+  if (isLoading) {
+    return (
+      <div className="auth-splash">
+        <div className="auth-splash__card">
+          <div className="auth-splash__spinner" />
+          <p className="auth-splash__text">すずはら家加载中…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  const role = user.role || "viewer";
+  const isDeveloper = role === "developer";
+  const isManager = role === "manager";
+  const isViewer = role === "viewer";
+
+  if (isViewer && location.pathname !== "/") {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className="app-root">
       <div className="app-shell">
@@ -49,13 +73,17 @@ export default function App() {
             <Link to="/" className={navLinkClass(location.pathname, "/")}>
               首页
             </Link>
-            <Link to="/albums" className={navLinkClass(location.pathname, "/albums")}>
-              相册
-            </Link>
-            <Link to="/social" className={navLinkClass(location.pathname, "/social")}>
-              社交
-            </Link>
-            {user?.role === "developer" && (
+            {(isManager || isDeveloper) && (
+              <Link to="/albums" className={navLinkClass(location.pathname, "/albums")}>
+                相册
+              </Link>
+            )}
+            {(isManager || isDeveloper) && (
+              <Link to="/social" className={navLinkClass(location.pathname, "/social")}>
+                社交
+              </Link>
+            )}
+            {(isManager || isDeveloper) && (
               <Link to="/upload" className={navLinkClass(location.pathname, "/upload")}>
                 上传
               </Link>
@@ -70,7 +98,7 @@ export default function App() {
               <span style={{ color: "rgba(50, 44, 84, 0.55)", fontSize: 14 }}>加载中…</span>
             ) : user ? (
               <>
-                {user.role === "developer" ? (
+                {isDeveloper ? (
                   <button
                     type="button"
                     onClick={() => navigate("/control")}
@@ -87,6 +115,10 @@ export default function App() {
                   >
                     {user.username}（开发者）
                   </button>
+                ) : isManager ? (
+                  <span style={{ fontSize: 14, color: "var(--brand-ink)" }}>
+                    {user.username}（二级管理员）
+                  </span>
                 ) : (
                   <span style={{ fontSize: 14, color: "var(--brand-ink)" }}>
                     {user.username}（访客）

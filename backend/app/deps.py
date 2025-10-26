@@ -65,6 +65,12 @@ def require_user(current_user: Annotated[User, Depends(get_current_user)]) -> Us
     return current_user
 
 
+def require_manager(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    if current_user.role not in ("developer", "manager"):
+        raise AppError(status_code=403, code=40301, message="NO_PERMISSION")
+    return current_user
+
+
 def require_developer(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     if current_user.role != "developer":
         raise AppError(status_code=403, code=40301, message="NO_PERMISSION")

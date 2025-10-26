@@ -26,3 +26,10 @@ export function useRequireDeveloper() {
   const isDeveloper = !!user && user.role === "developer";
   return { ...query, user, isDeveloper };
 }
+
+export function useRequireManager() {
+  const query = useMe();
+  const user = query.data ?? null;
+  const isManager = !!user && (user.role === "manager" || user.role === "developer");
+  return { ...query, user, isManager };
+}

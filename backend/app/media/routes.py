@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..deps import SessionDep, require_developer, require_user
+from ..deps import SessionDep, require_manager, require_user
 from ..models import Album, Media, Tag, User
 from ..utils.api import AppError, success
 
@@ -215,13 +215,14 @@ def list_media(
             count_query = count_query.where(f)
 
     if current_user.role != "developer":
+        join_on = Media.album_id == Album.id
         visibility_condition = or_(
             Media.owner_id == current_user.id,
             Media.album_id.is_(None),
             Album.visibility != "private",
         )
-        query = query.join(Album, isouter=True).where(visibility_condition)
-        count_query = count_query.join(Album, isouter=True).where(visibility_condition)
+        query = query.join(Album, join_on, isouter=True).where(visibility_condition)
+        count_query = count_query.join(Album, join_on, isouter=True).where(visibility_condition)
 
     order_column = Media.created_at if sort == "created_at" else Media.taken_at
     name_base = func.substring_index(Media.filename, ".", 1)
@@ -316,7 +317,7 @@ async def _store_file(upload: UploadFile, *, size_limit: int) -> tuple[Path, int
 @router.post("/upload")
 async def upload_media(
     session: SessionDep,
-    current_user: User = Depends(require_developer),
+    current_user: User = Depends(require_manager),
     files: List[UploadFile] = File(..., alias="file"),
     album_id: Optional[int] = Form(default=None),
     taken_at: Optional[str] = Form(default=None),
@@ -393,7 +394,7 @@ def update_media(
     media_id: int,
     body: UpdateMediaPayload,
     session: SessionDep,
-    current_user: User = Depends(require_developer),
+    current_user: User = Depends(require_manager),
 ):
     media = session.get(Media, media_id)
     if not media:
@@ -424,7 +425,7 @@ def update_media(
 def delete_media(
     media_id: int,
     session: SessionDep,
-    current_user: User = Depends(require_developer),
+    current_user: User = Depends(require_manager),
 ):
     media = session.get(Media, media_id)
     if not media:
@@ -451,7 +452,7 @@ def update_media_tags(
     media_id: int,
     body: TagUpdatePayload,
     session: SessionDep,
-    current_user: User = Depends(require_developer),
+    current_user: User = Depends(require_manager),
 ):
     media = session.get(Media, media_id)
     if not media:

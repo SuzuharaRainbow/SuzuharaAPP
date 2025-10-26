@@ -73,11 +73,6 @@ export default function AlbumDetail() {
         <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
           {album ? album.title : "相册详情"}
         </h2>
-        {album && (
-          <div style={{ color: "#6b7280", fontSize: 14 }}>
-            可见性：{album.visibility} ｜ 创建于 {new Date(album.created_at).toLocaleString()}
-          </div>
-        )}
       </header>
       {showInitialLoading && <div>加载相册内容…</div>}
       {isError && <div style={{ color: "#dc2626" }}>{error?.message || "加载失败"}</div>}

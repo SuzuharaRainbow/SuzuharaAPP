@@ -1,9 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import {
-  createBrowserRouter,
-  RouterProvider,
-} from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import "./styles/theme.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
@@ -19,12 +16,12 @@ import CategoryCollection from "./pages/CategoryCollection";
 import ControlCenter from "./pages/ControlCenter";
 
 const router = createBrowserRouter([
+  { path: "/login", element: <Login /> },
   {
     path: "/",
     element: <App />,
     children: [
       { index: true, element: <Gallery /> },
-      { path: "login", element: <Login /> },
       { path: "albums", element: <Albums /> },
       { path: "albums/:id", element: <AlbumDetail /> },
       { path: "media/:id", element: <MediaDetail /> },

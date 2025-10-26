@@ -203,6 +203,11 @@ def init_db() -> None:
     with SessionLocal() as session:
         _ensure_default_developer(session)
         try:
+            session.execute(text("ALTER TABLE users MODIFY COLUMN role ENUM('developer','manager','viewer') NOT NULL DEFAULT 'viewer'"))
+            session.commit()
+        except Exception:
+            session.rollback()
+        try:
             session.execute(text("ALTER TABLE media ADD COLUMN preview_path VARCHAR(512) NULL"))
             session.commit()
         except Exception:

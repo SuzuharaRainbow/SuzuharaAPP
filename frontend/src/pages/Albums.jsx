@@ -72,17 +72,22 @@ export default function Albums() {
     }
   };
 
-  const isDeveloper = user?.role === "developer";
+  const role = user?.role || "viewer";
+  const canManage = role === "developer" || role === "manager";
+  const isDeveloper = role === "developer";
   const baseURL = api.defaults.baseURL || "";
   const orderedAlbums = useMemo(() => albums || [], [albums]);
+  if (role === "viewer") {
+    return <div style={{ color: "#dc2626" }}>访客无法访问相册页。</div>;
+  }
   return (
     <section>
       <header className="page-header">
         <h2 className="page-title">相册管理</h2>
-        <p className="page-subtitle">集中查看相册，开发者可新建、重命名与删除。</p>
+        <p className="page-subtitle">集中查看相册，管理员与开发者可新建、重命名与删除。</p>
       </header>
 
-      {isDeveloper && (
+      {canManage && (
         <form onSubmit={handleCreate} className="album-form" style={{ marginBottom: 24 }}>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="相册标题" style={{ flex: "1 1 220px" }} />
           <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
@@ -135,7 +140,7 @@ export default function Albums() {
             <Link to={`/albums/${album.id}`} className="pill-button">
               查看
             </Link>
-            {isDeveloper && (
+            {canManage && (
               <>
                 <button type="button" onClick={() => onRename(album)} className="pill-button">
                   重命名

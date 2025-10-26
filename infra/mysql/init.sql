@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(50) NOT NULL UNIQUE,
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  role ENUM('developer','viewer') NOT NULL DEFAULT 'viewer',
+  role ENUM('developer','manager','viewer') NOT NULL DEFAULT 'viewer',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -86,4 +86,19 @@ CREATE TABLE IF NOT EXISTS home_section_albums (
   CONSTRAINT fk_home_section FOREIGN KEY (section_id) REFERENCES home_sections(id) ON DELETE CASCADE,
   CONSTRAINT fk_home_section_album FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
   CONSTRAINT uq_home_section_album UNIQUE KEY (section_id, album_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS access_requests (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  message VARCHAR(255) NULL,
+  status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  processed_at TIMESTAMP NULL DEFAULT NULL,
+  processed_by_id BIGINT UNSIGNED NULL,
+  decision_note VARCHAR(255) NULL,
+  CONSTRAINT fk_access_request_reviewer FOREIGN KEY (processed_by_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_access_request_status (status),
+  INDEX idx_access_request_created (created_at)
 ) ENGINE=InnoDB;

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.dialects.mysql import INTEGER as MySQLInteger
 
-from ..deps import SessionDep, require_developer, require_user
+from ..deps import SessionDep, require_manager, require_user
 from ..models import Album, Media, User
 from ..utils.api import AppError, success
 
@@ -147,7 +147,7 @@ def list_albums(
 
 
 @router.post("")
-def create_album(body: AlbumCreate, session: SessionDep, current_user: User = Depends(require_developer)):
+def create_album(body: AlbumCreate, session: SessionDep, current_user: User = Depends(require_manager)):
     visibility = _validate_visibility(body.visibility)
     album = Album(owner_id=current_user.id, title=body.title, visibility=visibility)
     session.add(album)
@@ -172,7 +172,7 @@ def update_album(
     album_id: int,
     body: AlbumUpdate,
     session: SessionDep,
-    current_user: User = Depends(require_developer),
+    current_user: User = Depends(require_manager),
 ):
     album = session.get(Album, album_id)
     if not album:
@@ -207,7 +207,7 @@ def update_album(
 
 
 @router.delete("/{album_id}")
-def delete_album(album_id: int, session: SessionDep, current_user: User = Depends(require_developer)):
+def delete_album(album_id: int, session: SessionDep, current_user: User = Depends(require_manager)):
     album = session.get(Album, album_id)
     if not album:
         raise AppError(status_code=404, code=40400, message="ALBUM_NOT_FOUND")

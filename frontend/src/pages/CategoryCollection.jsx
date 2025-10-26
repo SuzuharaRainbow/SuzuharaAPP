@@ -84,19 +84,11 @@ export default function CategoryCollection() {
     <section>
       <header className="page-header">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 className="page-title">
-            {section.title}
-            <span style={{ fontSize: 14, marginLeft: 8, color: "rgba(50,44,84,0.6)" }}>
-              首页预览 {Math.max(1, section.preview_rows || 1)} 排（{Math.max(1, section.preview_rows || 1) * 4} 个）
-            </span>
-          </h2>
+          <h2 className="page-title">{section.title}</h2>
           <Link to="/" className="button-secondary" style={{ padding: "6px 14px" }}>
             返回首页
           </Link>
         </div>
-        <p className="page-subtitle">
-          浏览 {section.title} 分类下的全部内容，支持继续筛选图片或视频类型。
-        </p>
       </header>
 
       {albumIds.length === 0 && (

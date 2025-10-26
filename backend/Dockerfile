@@ -11,8 +11,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 # 先装依赖
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -U pip \
-    && pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip install --no-cache-dir --default-timeout=120 -U pip \
+    && pip install --no-cache-dir --default-timeout=120 -r /tmp/requirements.txt
 
 # 拷贝后端代码
 COPY app /app/app

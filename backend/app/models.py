@@ -25,15 +25,20 @@ from .db import Base
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(MySQLBigInt(unsigned=True), primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(Enum("developer", "viewer", name="user_role_enum"))
+    role: Mapped[str] = mapped_column(Enum("developer", "manager", "viewer", name="user_role_enum"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     albums: Mapped[list["Album"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     media: Mapped[list["Media"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    processed_requests: Mapped[list["AccessRequest"]] = relationship(
+        "AccessRequest",
+        back_populates="processed_by",
+        foreign_keys="AccessRequest.processed_by_id",
+    )
 
 
 class Album(Base):
@@ -220,3 +225,28 @@ class HomeSectionAlbum(Base):
 
     section: Mapped[HomeSection] = relationship(back_populates="albums")
     album: Mapped[Album] = relationship(back_populates="home_sections")
+
+
+class AccessRequest(Base):
+    __tablename__ = "access_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[Optional[str]] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(
+        Enum("pending", "approved", "rejected", name="access_request_status_enum"),
+        nullable=False,
+        default="pending",
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    processed_by_id: Mapped[Optional[int]] = mapped_column(MySQLBigInt(unsigned=True), ForeignKey("users.id", ondelete="SET NULL"))
+    decision_note: Mapped[Optional[str]] = mapped_column(String(255))
+
+    processed_by: Mapped[Optional[User]] = relationship(
+        "User",
+        foreign_keys=[processed_by_id],
+        back_populates="processed_requests",
+    )

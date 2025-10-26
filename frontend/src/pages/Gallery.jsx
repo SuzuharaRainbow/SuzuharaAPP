@@ -50,12 +50,7 @@ function CategoryPreviewSection({ section, albumIds, type, isConfigLoading }) {
   return (
     <section style={{ marginBottom: 40 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
-        <h3 style={{ fontSize: 22, fontWeight: 700 }}>
-          {section.title}
-          <span style={{ fontSize: 13, marginLeft: 8, color: "rgba(50,44,84,0.6)" }}>
-            预览 {rows} 排（{rows * 4} 个）
-          </span>
-        </h3>
+        <h3 style={{ fontSize: 22, fontWeight: 700 }}>{section.title}</h3>
         {shouldShowMore && (
           <Link
             to={`/collections/${section.key}${search}`}
@@ -90,10 +85,6 @@ export default function Gallery() {
 
   return (
     <section>
-      <header className="page-header">
-        <h2 className="page-title">Suzuhara 精选</h2>
-        <p className="page-subtitle">按照控制中心配置的分类展示最新内容，点击分类或更多按钮可继续浏览。</p>
-      </header>
       {sectionsLoading && <div>加载分类中…</div>}
       {!sectionsLoading && orderedSections.length === 0 && (
         <div style={{ color: "rgba(50,44,84,0.6)", marginTop: 16 }}>
