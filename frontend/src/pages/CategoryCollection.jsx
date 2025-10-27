@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams, useParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useParams } from "react-router-dom";
 import MediaCard from "../components/MediaCard";
 import { useCategoryMedia } from "../hooks/useCategoryMedia";
 import { useHomeSections } from "../hooks/useHomeSections";
@@ -8,6 +8,7 @@ const PAGE_SIZE = 12;
 
 export default function CategoryCollection() {
   const { key } = useParams();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const type = params.get("type") || "all";
   const page = Math.max(1, Number.parseInt(params.get("page") || "1", 10));
@@ -35,6 +36,7 @@ export default function CategoryCollection() {
   const showInitialLoading = isLoading && items.length === 0;
   const showEmptyState = !showInitialLoading && items.length === 0;
   const [pageInput, setPageInput] = useState(String(page));
+  const [searchValue, setSearchValue] = useState("");
 
   useEffect(() => {
     if (!showInitialLoading && page > totalPages) {
@@ -72,6 +74,16 @@ export default function CategoryCollection() {
     goToPage(clamped);
   };
 
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    const trimmed = searchValue.trim();
+    if (!trimmed) {
+      return;
+    }
+    setSearchValue(trimmed);
+    navigate(`/search?query=${encodeURIComponent(trimmed)}`);
+  };
+
   if (sectionsLoading) {
     return (
       <section>
@@ -99,8 +111,40 @@ export default function CategoryCollection() {
   return (
     <section>
       <header className="page-header">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 className="page-title">{section.title}</h2>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <h2 className="page-title" style={{ margin: 0 }}>
+              {section.title}
+            </h2>
+            <form
+              onSubmit={handleSearchSubmit}
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <input
+                type="search"
+                placeholder="搜索媒体..."
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  border: "1px solid rgba(248,167,208,0.45)",
+                  minWidth: 200,
+                }}
+              />
+              <button type="submit" className="button-secondary" style={{ padding: "6px 16px" }}>
+                搜索
+              </button>
+            </form>
+          </div>
           <Link to="/" className="button-secondary" style={{ padding: "6px 14px" }}>
             返回首页
           </Link>

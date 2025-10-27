@@ -14,6 +14,7 @@ import SocialFeed from "./pages/SocialFeed";
 import SocialPostDetail from "./pages/SocialPostDetail";
 import CategoryCollection from "./pages/CategoryCollection";
 import ControlCenter from "./pages/ControlCenter";
+import SearchResults from "./pages/SearchResults";
 
 const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
@@ -29,6 +30,7 @@ const router = createBrowserRouter([
       { path: "social", element: <SocialFeed /> },
       { path: "social/:id", element: <SocialPostDetail /> },
       { path: "collections/:key", element: <CategoryCollection /> },
+      { path: "search", element: <SearchResults /> },
       { path: "control", element: <ControlCenter /> },
     ],
   },

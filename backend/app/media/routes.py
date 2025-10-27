@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..deps import SessionDep, require_manager, require_user
-from ..models import Album, Media, Tag, User
+from ..models import Album, Media, MediaTag, Tag, User
 from ..utils.api import AppError, success
 
 logger = logging.getLogger(__name__)
@@ -274,7 +274,19 @@ def list_media(
         filters.append(Media.album_id == album_id)
     if q:
         like_term = f"%{q}%"
-        filters.append(Media.title.ilike(like_term))
+        tag_match_subquery = (
+            select(MediaTag.media_id)
+            .join(Tag, MediaTag.tag_id == Tag.id)
+            .where(Tag.name.ilike(like_term))
+            .scalar_subquery()
+        )
+        filters.append(
+            or_(
+                Media.title.ilike(like_term),
+                Media.filename.ilike(like_term),
+                Media.id.in_(tag_match_subquery),
+            )
+        )
 
     if filters:
         for f in filters:

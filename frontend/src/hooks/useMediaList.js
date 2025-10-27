@@ -15,22 +15,23 @@ export function useMediaList(params) {
     "media",
     cleaned.album_id ?? "all",
     cleaned.type ?? "all",
+    cleaned.q ?? "",
     Number(cleaned.page ?? 1),
     Number(cleaned.size ?? 12),
   ];
 
-  const albumKey = cleaned.album_id ?? "all";
-  const previousAlbumRef = useRef(albumKey);
-  const isSameAlbum = previousAlbumRef.current === albumKey;
+  const scopeKey = `${cleaned.album_id ?? "all"}::${cleaned.q ?? ""}`;
+  const previousScopeRef = useRef(scopeKey);
+  const isSameScope = previousScopeRef.current === scopeKey;
 
   useEffect(() => {
-    previousAlbumRef.current = albumKey;
-  }, [albumKey]);
+    previousScopeRef.current = scopeKey;
+  }, [scopeKey]);
 
   return useQuery({
     queryKey: key,
     queryFn: () => api.get("/media", { params: cleaned }),
-    keepPreviousData: isSameAlbum,
+    keepPreviousData: isSameScope,
     staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
   });
