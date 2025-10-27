@@ -15,7 +15,7 @@ export default function MediaDetail() {
   const { data: albums } = useAlbums();
   const { data: currentUser } = useMe();
 
-  const role = currentUser?.role || "viewer";
+  const role = currentUser?.effective_role || currentUser?.role || "viewer";
   const canEdit = role === "developer" || role === "manager";
 
   const [formState, setFormState] = useState({ title: "", album_id: "", taken_at: "" });

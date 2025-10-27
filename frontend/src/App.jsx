@@ -47,17 +47,26 @@ export default function App() {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  const role = user.role || "viewer";
-  const isDeveloper = role === "developer";
-  const isManager = role === "manager";
-  const isViewer = role === "viewer";
+  const actualRole = user.role || "viewer";
+  const effectiveRole = user.effective_role || actualRole;
+  const isDeveloperActual = actualRole === "developer";
+  const isManagerActual = actualRole === "manager";
+  const isViewerEffective = effectiveRole === "viewer";
+  const canManageView = effectiveRole === "manager" || effectiveRole === "developer";
+
+  const roleLabel = (roleValue) => {
+    if (roleValue === "developer") return "开发者";
+    if (roleValue === "manager") return "二级管理员";
+    return "访客";
+  };
 
   if (
-    isViewer &&
+    isViewerEffective &&
     !(
       location.pathname === "/" ||
       location.pathname.startsWith("/media") ||
-      location.pathname.startsWith("/collections")
+      location.pathname.startsWith("/collections") ||
+      (location.pathname.startsWith("/control") && (actualRole === "manager" || actualRole === "developer"))
     )
   ) {
     return <Navigate to="/" replace />;
@@ -80,17 +89,17 @@ export default function App() {
             <Link to="/" className={navLinkClass(location.pathname, "/")}>
               首页
             </Link>
-            {(isManager || isDeveloper) && (
+            {canManageView && (
               <Link to="/albums" className={navLinkClass(location.pathname, "/albums")}>
                 相册
               </Link>
             )}
-            {(isManager || isDeveloper) && (
+            {canManageView && (
               <Link to="/social" className={navLinkClass(location.pathname, "/social")}>
                 社交
               </Link>
             )}
-            {(isManager || isDeveloper) && (
+            {canManageView && (
               <Link to="/upload" className={navLinkClass(location.pathname, "/upload")}>
                 上传
               </Link>
@@ -105,7 +114,7 @@ export default function App() {
               <span style={{ color: "rgba(50, 44, 84, 0.55)", fontSize: 14 }}>加载中…</span>
             ) : user ? (
               <>
-                {isDeveloper ? (
+                {isDeveloperActual || isManagerActual ? (
                   <button
                     type="button"
                     onClick={() => navigate("/control")}
@@ -120,12 +129,9 @@ export default function App() {
                       textUnderlineOffset: 4,
                     }}
                   >
-                    {user.username}（开发者）
+                    {user.username}（{roleLabel(actualRole)}）
+                    {effectiveRole !== actualRole ? ` · 视角：${roleLabel(effectiveRole)}` : ""}
                   </button>
-                ) : isManager ? (
-                  <span style={{ fontSize: 14, color: "var(--brand-ink)" }}>
-                    {user.username}（二级管理员）
-                  </span>
                 ) : (
                   <span style={{ fontSize: 14, color: "var(--brand-ink)" }}>
                     {user.username}（访客）

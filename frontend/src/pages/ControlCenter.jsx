@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../api";
-import { useRequireDeveloper } from "../hooks/useMe";
+import { useMe } from "../hooks/useMe";
 import { useHomeSections } from "../hooks/useHomeSections";
 import { useAlbums } from "../hooks/useAlbums";
 import { useAccessRequests } from "../hooks/useAccessRequests";
@@ -15,17 +15,18 @@ const cardStyle = {
   boxShadow: "var(--shadow-soft)",
 };
 
-const TAB_OPTIONS = [
-  { id: "home", label: "主页" },
-  { id: "albums", label: "相册" },
-  { id: "requests", label: "访客申请" },
-  { id: "accounts", label: "账号管理" },
-];
+const TAB_DEFINITIONS = {
+  home: { id: "home", label: "主页" },
+  albums: { id: "albums", label: "相册" },
+  requests: { id: "requests", label: "访客申请" },
+  accounts: { id: "accounts", label: "账号管理" },
+  view: { id: "view", label: "视图控制" },
+};
 
-function TabSwitcher({ activeTab, onChange }) {
+function TabSwitcher({ activeTab, onChange, options }) {
   return (
     <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-      {TAB_OPTIONS.map((tab) => (
+      {options.map((tab) => (
         <button
           key={tab.id}
           type="button"
@@ -919,30 +920,145 @@ function AccountsTab() {
   );
 }
 
-export default function ControlCenter() {
-  const navigate = useNavigate();
-  const { isLoading, isDeveloper } = useRequireDeveloper();
-  const [params, setParams] = useSearchParams();
-  const activeTab = params.get("tab") || "home";
+function ViewModeTab({ user }) {
+  const queryClient = useQueryClient();
+  const actualRole = user?.role || "viewer";
+  const currentView = user?.effective_role || actualRole;
+  const [selectedView, setSelectedView] = useState(currentView);
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    if (!TAB_OPTIONS.some((tab) => tab.id === activeTab)) {
+    setSelectedView(currentView);
+  }, [currentView]);
+
+  const options = useMemo(() => {
+    if (actualRole === "developer") {
+      return [
+        { value: "developer", label: "开发者视图" },
+        { value: "manager", label: "二级管理员视图" },
+        { value: "viewer", label: "访客视图" },
+      ];
+    }
+    if (actualRole === "manager") {
+      return [
+        { value: "manager", label: "二级管理员视图" },
+        { value: "viewer", label: "访客视图" },
+      ];
+    }
+    return [];
+  }, [actualRole]);
+
+  const updateView = useMutation({
+    mutationFn: (target) => {
+      const payload = { view_role: target === actualRole ? null : target };
+      return api.post("/auth/view-role", payload);
+    },
+    onSuccess: () => {
+      setFeedback("视角已更新，正在返回主页…");
+      queryClient.invalidateQueries(["me"]);
+      window.setTimeout(() => {
+        window.location.href = "/";
+      }, 300);
+    },
+    onError: (err) => {
+      setFeedback(err?.message || "视角更新失败");
+    },
+  });
+
+  const handleApply = () => {
+    setFeedback("");
+    if (selectedView === currentView) {
+      setFeedback("当前已是该视角，无需切换。");
+      return;
+    }
+    updateView.mutate(selectedView);
+  };
+
+  return (
+    <div style={{ ...cardStyle, padding: 24, maxWidth: 520 }}>
+      <h3 style={{ fontSize: 22, marginBottom: 6 }}>视图控制</h3>
+      <p style={{ fontSize: 13, color: "rgba(50,44,84,0.65)", marginTop: 0 }}>
+        切换视角只会影响页面展示与可见功能，账号权限保持不变。切换后页面将自动刷新回到首页。
+      </p>
+      {options.length === 0 ? (
+        <div style={{ color: "rgba(50,44,84,0.6)" }}>当前角色不支持切换视角。</div>
+      ) : (
+        <div style={{ display: "grid", gap: 16, marginTop: 12 }}>
+          <label style={{ display: "grid", gap: 8 }}>
+            <span style={{ fontWeight: 600 }}>选择视角</span>
+            <select
+              value={selectedView}
+              onChange={(event) => {
+                setFeedback("");
+                setSelectedView(event.target.value);
+              }}
+              style={{ width: 220 }}
+            >
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="button-primary"
+            onClick={handleApply}
+            disabled={updateView.isPending}
+            style={{ width: 160 }}
+          >
+            {updateView.isPending ? "切换中…" : "保存并切换"}
+          </button>
+          {feedback && <div style={{ color: "var(--brand-ink)" }}>{feedback}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ControlCenter() {
+  const navigate = useNavigate();
+  const { data: user, isLoading } = useMe();
+  const [params, setParams] = useSearchParams();
+
+  const actualRole = user?.role || "viewer";
+  const canAccess = actualRole === "developer" || actualRole === "manager";
+  const tabOrder = useMemo(() => {
+    if (actualRole === "developer") {
+      return ["home", "albums", "requests", "accounts", "view"];
+    }
+    if (actualRole === "manager") {
+      return ["home", "albums", "view"];
+    }
+    return [];
+  }, [actualRole]);
+  const availableTabs = tabOrder.map((id) => TAB_DEFINITIONS[id]).filter(Boolean);
+  const requestedTab = params.get("tab");
+  const fallbackTab = availableTabs[0]?.id ?? "home";
+  const activeTab = availableTabs.some((tab) => tab.id === requestedTab) ? requestedTab : fallbackTab;
+
+  useEffect(() => {
+    if (!canAccess || availableTabs.length === 0) {
+      return;
+    }
+    if (!requestedTab || !availableTabs.some((tab) => tab.id === requestedTab)) {
       const next = new URLSearchParams(params);
-      next.set("tab", "home");
+      next.set("tab", fallbackTab);
       setParams(next, { replace: true });
     }
-  }, [activeTab, params, setParams]);
+  }, [availableTabs, canAccess, fallbackTab, params, requestedTab, setParams]);
 
   if (isLoading) {
     return <div>加载中…</div>;
   }
 
-  if (!isDeveloper) {
+  if (!canAccess) {
     return (
       <section>
         <header className="page-header">
           <h2 className="page-title">控制中心</h2>
-          <p className="page-subtitle">仅限开发者访问。</p>
+          <p className="page-subtitle">仅限管理员与开发者访问。</p>
         </header>
         <div style={{ color: "#dc2626", marginBottom: 16 }}>您没有访问控制中心的权限。</div>
         <button type="button" className="button-secondary" onClick={() => navigate(-1)}>
@@ -953,25 +1069,36 @@ export default function ControlCenter() {
   }
 
   const handleTabChange = (nextTab) => {
+    if (!availableTabs.some((tab) => tab.id === nextTab)) {
+      return;
+    }
     const next = new URLSearchParams(params);
     next.set("tab", nextTab);
     setParams(next, { replace: true });
   };
 
+  const subtitle =
+    actualRole === "developer"
+      ? "统一管理首页分类、相册内容、访客申请，以及账号视角。"
+      : "管理首页分类与相册，并可调整当前账号视角。";
+
   return (
     <section>
       <header className="page-header">
         <h2 className="page-title">控制中心</h2>
-        <p className="page-subtitle">统一管理首页分类、相册内容，以及访客访问申请。</p>
+        <p className="page-subtitle">{subtitle}</p>
       </header>
 
-      <TabSwitcher activeTab={activeTab} onChange={handleTabChange} />
+      {availableTabs.length > 0 && (
+        <TabSwitcher activeTab={activeTab} onChange={handleTabChange} options={availableTabs} />
+      )}
 
       {(() => {
         if (activeTab === "home") return <HomeTab />;
         if (activeTab === "albums") return <AlbumsTab />;
         if (activeTab === "requests") return <AccessRequestsTab />;
-        return <AccountsTab />;
+        if (activeTab === "accounts") return <AccountsTab />;
+        return <ViewModeTab user={user} />;
       })()}
     </section>
   );

@@ -201,12 +201,19 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_media_root()
     with SessionLocal() as session:
-        _ensure_default_developer(session)
         try:
             session.execute(text("ALTER TABLE users MODIFY COLUMN role ENUM('developer','manager','viewer') NOT NULL DEFAULT 'viewer'"))
             session.commit()
         except Exception:
             session.rollback()
+        try:
+            session.execute(
+                text("ALTER TABLE users ADD COLUMN view_role ENUM('developer','manager','viewer') NULL DEFAULT NULL")
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+        _ensure_default_developer(session)
         try:
             session.execute(text("ALTER TABLE media ADD COLUMN preview_path VARCHAR(512) NULL"))
             session.commit()

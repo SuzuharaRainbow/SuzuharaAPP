@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import re
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends
@@ -32,7 +32,14 @@ class LoginRequest(BaseModel):
 
 
 def _user_payload(user: User) -> dict:
-    return {"id": user.id, "username": user.username, "role": user.role}
+    effective_role = user.view_role or user.role
+    return {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "view_role": user.view_role,
+        "effective_role": effective_role,
+    }
 
 
 def _access_request_payload(request: AccessRequest) -> dict:
@@ -104,6 +111,10 @@ class AccessDecisionBody(BaseModel):
 
 class RoleUpdateBody(BaseModel):
     role: Literal["viewer", "manager"]
+
+
+class ViewRoleBody(BaseModel):
+    view_role: Optional[Literal["developer", "manager", "viewer"]] = Field(default=None)
 
 
 @router.post("/access-requests")
@@ -223,6 +234,33 @@ def update_user_role(
     session.commit()
     session.refresh(user)
     return success({"id": user.id, "username": user.username, "role": user.role})
+
+
+@router.post("/view-role")
+def update_view_role(
+    body: ViewRoleBody,
+    session: SessionDep,
+    current_user: User = Depends(require_user),
+):
+    if current_user.role not in ("developer", "manager"):
+        raise AppError(status_code=403, code=40301, message="NO_PERMISSION")
+
+    allowed_roles = {
+        "developer": {"developer", "manager", "viewer"},
+        "manager": {"manager", "viewer"},
+    }
+    target = body.view_role
+    if target is not None and target not in allowed_roles[current_user.role]:
+        raise AppError(status_code=400, code=40020, message="INVALID_VIEW_ROLE")
+
+    if target is None or target == current_user.role:
+        current_user.view_role = None
+    else:
+        current_user.view_role = target
+
+    session.commit()
+    session.refresh(current_user)
+    return success({"user": _user_payload(current_user)})
 
 
 @router.post("/access-requests/{request_id}/reject")

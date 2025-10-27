@@ -30,6 +30,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(Enum("developer", "manager", "viewer", name="user_role_enum"))
+    view_role: Mapped[Optional[str]] = mapped_column(Enum("developer", "manager", "viewer", name="user_role_enum"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     albums: Mapped[list["Album"]] = relationship(back_populates="owner", cascade="all, delete-orphan")

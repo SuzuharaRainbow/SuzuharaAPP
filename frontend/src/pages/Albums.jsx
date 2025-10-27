@@ -72,9 +72,8 @@ export default function Albums() {
     }
   };
 
-  const role = user?.role || "viewer";
+  const role = user?.effective_role || user?.role || "viewer";
   const canManage = role === "developer" || role === "manager";
-  const isDeveloper = role === "developer";
   const baseURL = api.defaults.baseURL || "";
   const orderedAlbums = useMemo(() => albums || [], [albums]);
   if (role === "viewer") {

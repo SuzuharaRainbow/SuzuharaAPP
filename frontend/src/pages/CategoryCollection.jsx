@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams, useParams } from "react-router-dom";
 import MediaCard from "../components/MediaCard";
 import { useCategoryMedia } from "../hooks/useCategoryMedia";
@@ -34,6 +34,7 @@ export default function CategoryCollection() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const showInitialLoading = isLoading && items.length === 0;
   const showEmptyState = !showInitialLoading && items.length === 0;
+  const [pageInput, setPageInput] = useState(String(page));
 
   useEffect(() => {
     if (!showInitialLoading && page > totalPages) {
@@ -47,6 +48,10 @@ export default function CategoryCollection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showInitialLoading, page, totalPages]);
 
+  useEffect(() => {
+    setPageInput(String(page));
+  }, [page]);
+
   const goToPage = (nextPage) => {
     if (nextPage === page || nextPage < 1 || nextPage > totalPages) {
       return;
@@ -54,6 +59,17 @@ export default function CategoryCollection() {
     const next = new URLSearchParams(params);
     next.set("page", String(nextPage));
     setParams(next, { replace: true });
+  };
+
+  const handlePageSubmit = (event) => {
+    event.preventDefault();
+    if (!pageInput) return;
+    const parsed = Number.parseInt(pageInput, 10);
+    if (Number.isNaN(parsed)) {
+      return;
+    }
+    const clamped = Math.min(Math.max(parsed, 1), totalPages);
+    goToPage(clamped);
   };
 
   if (sectionsLoading) {
@@ -113,7 +129,18 @@ export default function CategoryCollection() {
                       <MediaCard key={item.id} item={item} />
                     ))}
                   </div>
-                  <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24 }}>
+                  <form
+                    onSubmit={handlePageSubmit}
+                    style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 24, flexWrap: "wrap" }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => goToPage(1)}
+                      disabled={page <= 1 || isFetching}
+                      className="button-secondary"
+                    >
+                      首页
+                    </button>
                     <button
                       type="button"
                       onClick={() => goToPage(Math.max(1, page - 1))}
@@ -122,9 +149,24 @@ export default function CategoryCollection() {
                     >
                       上一页
                     </button>
-                    <span style={{ alignSelf: "center", fontSize: 14 }}>
-                      第 {page} 页 / 共 {totalPages} 页
-                    </span>
+                    <label style={{ display: "flex", alignItems: "center", fontSize: 14, gap: 6 }}>
+                      <span>第</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={totalPages}
+                        value={pageInput}
+                        onChange={(event) => setPageInput(event.target.value)}
+                        style={{
+                          width: 60,
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          border: "1px solid #d1d5db",
+                          textAlign: "center",
+                        }}
+                      />
+                      <span>页 / 共 {totalPages} 页</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => goToPage(Math.min(totalPages, page + 1))}
@@ -133,7 +175,15 @@ export default function CategoryCollection() {
                     >
                       下一页
                     </button>
-                  </div>
+                    <button
+                      type="button"
+                      onClick={() => goToPage(totalPages)}
+                      disabled={page >= totalPages || isFetching}
+                      className="button-secondary"
+                    >
+                      末页
+                    </button>
+                  </form>
                   {isFetching && !showInitialLoading && (
                     <div style={{ marginTop: 12, textAlign: "center", fontSize: 13, color: "rgba(50,44,84,0.6)" }}>
                       正在加载更多内容…
