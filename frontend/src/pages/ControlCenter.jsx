@@ -1023,16 +1023,29 @@ export default function ControlCenter() {
   const [params, setParams] = useSearchParams();
 
   const actualRole = user?.role || "viewer";
+  const effectiveRole = user?.effective_role || actualRole;
   const canAccess = actualRole === "developer" || actualRole === "manager";
   const tabOrder = useMemo(() => {
+    if (!canAccess) {
+      return [];
+    }
     if (actualRole === "developer") {
-      return ["home", "albums", "requests", "accounts", "view"];
+      if (effectiveRole === "developer") {
+        return ["home", "albums", "requests", "accounts", "view"];
+      }
+      if (effectiveRole === "manager") {
+        return ["home", "albums", "view"];
+      }
+      return ["view"];
     }
     if (actualRole === "manager") {
-      return ["home", "albums", "view"];
+      if (effectiveRole === "manager") {
+        return ["home", "albums", "view"];
+      }
+      return ["view"];
     }
     return [];
-  }, [actualRole]);
+  }, [actualRole, effectiveRole, canAccess]);
   const availableTabs = tabOrder.map((id) => TAB_DEFINITIONS[id]).filter(Boolean);
   const requestedTab = params.get("tab");
   const fallbackTab = availableTabs[0]?.id ?? "home";
@@ -1078,7 +1091,7 @@ export default function ControlCenter() {
   };
 
   const subtitle =
-    actualRole === "developer"
+    actualRole === "developer" && effectiveRole === "developer"
       ? "统一管理首页分类、相册内容、访客申请，以及账号视角。"
       : "管理首页分类与相册，并可调整当前账号视角。";
 
