@@ -53,6 +53,7 @@ export default function App() {
   const isManagerActual = actualRole === "manager";
   const isViewerEffective = effectiveRole === "viewer";
   const canManageView = effectiveRole === "manager" || effectiveRole === "developer";
+  const canViewSocial = effectiveRole === "developer";
 
   const roleLabel = (roleValue) => {
     if (roleValue === "developer") return "开发者";
@@ -94,7 +95,7 @@ export default function App() {
                 相册
               </Link>
             )}
-            {canManageView && (
+            {canViewSocial && (
               <Link to="/social" className={navLinkClass(location.pathname, "/social")}>
                 社交
               </Link>
