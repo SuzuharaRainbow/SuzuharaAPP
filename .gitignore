@@ -27,6 +27,11 @@ infra/frontend.env
 .DS_Store
 Thumbs.db
 *.log
+**/__pycache__/
+*.pem
+*:Zone.Identifier
+X/
+backend/app/home_sections_tmp/
 
 # Misc
 *.py[cod]
